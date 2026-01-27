@@ -197,9 +197,8 @@ class SparkplugPublisher:
 
         for metric in decoded.metrics:
             name = metric.name or ""
-            if name.endswith("Rebirth") or "Rebirth" in name:
-                if self._metric_truthy(metric):
-                    return True
+            if (name.endswith("Rebirth") or "Rebirth" in name) and self._metric_truthy(metric):
+                return True
         return False
 
     def _store_device_metrics(self, device_id: str, metrics: list[ContextMetric]) -> None:
