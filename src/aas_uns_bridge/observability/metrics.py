@@ -113,6 +113,96 @@ class BridgeMetrics:
             "Number of assets currently offline",
         )
 
+        # Fidelity metrics
+        self.fidelity_overall = Gauge(
+            "aas_bridge_fidelity_overall",
+            "Overall transformation fidelity score (0.0-1.0)",
+            ["asset_id"],
+        )
+
+        self.fidelity_structural = Gauge(
+            "aas_bridge_fidelity_structural",
+            "Structural fidelity score (0.0-1.0)",
+            ["asset_id"],
+        )
+
+        self.fidelity_semantic = Gauge(
+            "aas_bridge_fidelity_semantic",
+            "Semantic fidelity score (0.0-1.0)",
+            ["asset_id"],
+        )
+
+        self.fidelity_entropy_loss = Gauge(
+            "aas_bridge_fidelity_entropy_loss",
+            "Information entropy loss ratio (0.0-1.0)",
+            ["asset_id"],
+        )
+
+        self.fidelity_evaluations_total = Counter(
+            "aas_bridge_fidelity_evaluations_total",
+            "Total number of fidelity evaluations",
+        )
+
+        # Streaming drift (hypervisor) metrics
+        self.streaming_drift_detected_total = Counter(
+            "aas_bridge_streaming_drift_detected_total",
+            "Total streaming drift events detected",
+            ["drift_type", "severity"],
+        )
+
+        self.streaming_drift_anomaly_score = Gauge(
+            "aas_bridge_streaming_drift_anomaly_score",
+            "Latest anomaly score from streaming detector",
+            ["asset_id"],
+        )
+
+        self.streaming_drift_forest_observations = Gauge(
+            "aas_bridge_streaming_drift_forest_observations",
+            "Number of observations processed by Half-Space Forest",
+            ["asset_id"],
+        )
+
+        # Semantic resolution cache metrics
+        self.semantic_cache_hits_total = Counter(
+            "aas_bridge_semantic_cache_hits_total",
+            "Total semantic cache hits",
+            ["cache_tier"],  # 'memory' or 'sqlite'
+        )
+
+        self.semantic_cache_misses_total = Counter(
+            "aas_bridge_semantic_cache_misses_total",
+            "Total semantic cache misses",
+        )
+
+        self.semantic_cache_size = Gauge(
+            "aas_bridge_semantic_cache_size",
+            "Number of entries in semantic cache",
+            ["tier"],  # 'memory' or 'total'
+        )
+
+        self.semantic_pointers_registered_total = Counter(
+            "aas_bridge_semantic_pointers_registered_total",
+            "Total semantic pointers registered",
+        )
+
+        # Bidirectional sync metrics
+        self.bidirectional_writes_total = Counter(
+            "aas_bridge_bidirectional_writes_total",
+            "Total write-back operations",
+            ["result"],  # 'success' or 'failure'
+        )
+
+        self.bidirectional_validations_total = Counter(
+            "aas_bridge_bidirectional_validations_total",
+            "Total write validations",
+            ["result"],  # 'allowed' or 'denied'
+        )
+
+        self.aas_write_retries_total = Counter(
+            "aas_bridge_aas_write_retries_total",
+            "Total AAS write retry attempts",
+        )
+
 
 # Global metrics instance
 METRICS = BridgeMetrics()

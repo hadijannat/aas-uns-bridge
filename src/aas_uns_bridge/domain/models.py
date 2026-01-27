@@ -11,6 +11,10 @@ class ContextMetric:
     A ContextMetric captures a single value extracted from an AAS submodel element,
     along with all metadata needed to publish it to both UNS retained topics and
     Sparkplug B payloads.
+
+    Supports poly-hierarchical semantic references through the semantic_keys tuple,
+    which captures all semantic identifiers from composite references. The semantic_id
+    field provides backward compatibility by returning the primary (first) key.
     """
 
     path: str
@@ -29,7 +33,11 @@ class ContextMetric:
     """XSD value type (e.g., 'xs:string', 'xs:int', 'xs:double')."""
 
     semantic_id: str | None = None
-    """IRDI or IRI semantic identifier (e.g., '0173-1#02-AAO677#002')."""
+    """Primary IRDI or IRI semantic identifier (e.g., '0173-1#02-AAO677#002').
+
+    For poly-hierarchical references, this is the first key. Use semantic_keys
+    for access to all keys.
+    """
 
     unit: str | None = None
     """Unit of measurement from DataSpecificationIEC61360 (e.g., 'mm', 'kg')."""
@@ -39,6 +47,21 @@ class ContextMetric:
 
     timestamp_ms: int = 0
     """Unix timestamp in milliseconds when the metric was extracted."""
+
+    semantic_keys: tuple[str, ...] = ()
+    """All semantic keys for poly-hierarchical references.
+
+    AAS elements can have composite semantic references pointing to multiple
+    concepts in different dictionaries. This tuple captures all keys in order.
+    If empty, semantic_id is the only reference.
+    """
+
+    submodel_semantic_id: str | None = None
+    """Semantic identifier of the parent submodel.
+
+    Provides context about which submodel template this metric belongs to,
+    useful for understanding the metric's role in the overall asset model.
+    """
 
 
 @dataclass(frozen=True, slots=True)

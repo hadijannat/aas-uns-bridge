@@ -1,14 +1,28 @@
-"""Sparkplug B payload builder using protobuf."""
+"""Sparkplug B payload builder using protobuf.
+
+This module provides builders for Sparkplug B payloads with support for
+AAS semantic metadata through standardized PropertySet conventions.
+
+The semantic PropertySet keys follow a namespace convention (aas:*) for
+interoperability across AAS-aware Sparkplug consumers.
+"""
+
+from __future__ import annotations
 
 import importlib
+import json
 import time
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from aas_uns_bridge.publishers.sparkplug_types import (
     SparkplugDataType,
     python_to_sparkplug_type,
     xsd_to_sparkplug_type,
 )
+
+if TYPE_CHECKING:
+    from aas_uns_bridge.domain.models import ContextMetric
+    from aas_uns_bridge.semantic.models import SemanticContext
 
 # Import generated protobuf classes
 # These will be generated from sparkplug_b.proto
@@ -17,6 +31,113 @@ try:
     spb = importlib.import_module("aas_uns_bridge.proto.sparkplug_b_pb2")
 except Exception:
     spb = None
+
+
+# =============================================================================
+# Standardized Semantic PropertySet Keys for Sparkplug B
+# =============================================================================
+# These keys follow the AAS namespace convention for interoperability.
+# Sparkplug consumers can filter/route based on these properties.
+
+SEMANTIC_PROPS = {
+    # Primary semantic identifier (IRDI or IRI)
+    "semanticId": "aas:semanticId",
+    # Source dictionary (ECLASS, IEC_CDD, IDTA, custom)
+    "semanticDictionary": "aas:semanticDictionary",
+    # Dictionary version
+    "semanticVersion": "aas:semanticVersion",
+    # Hash pointer for resolution cache lookup
+    "semanticHash": "aas:semanticHash",
+    # JSON array of all semantic keys (poly-hierarchical)
+    "semanticKeys": "aas:semanticKeys",
+    # Fidelity score for transformation quality
+    "fidelityScore": "aas:fidelityScore",
+    # Parent submodel semantic ID
+    "submodelSemanticId": "aas:submodelSemanticId",
+    # AAS element type
+    "aasType": "aas:aasType",
+    # Unit of measurement
+    "unit": "aas:unit",
+    # Source AAS URI
+    "aasSource": "aas:aasSource",
+}
+
+
+def build_semantic_properties(
+    metric: ContextMetric,
+    fidelity_score: float | None = None,
+) -> dict[str, Any]:
+    """Build semantic PropertySet from a ContextMetric.
+
+    Creates a dictionary of semantic metadata suitable for inclusion
+    in Sparkplug B metric properties.
+
+    Args:
+        metric: The context metric with semantic metadata.
+        fidelity_score: Optional fidelity score to include.
+
+    Returns:
+        Dictionary of property key-value pairs.
+    """
+    props: dict[str, Any] = {}
+
+    if metric.semantic_id:
+        props[SEMANTIC_PROPS["semanticId"]] = metric.semantic_id
+
+    # Include all semantic keys if poly-hierarchical
+    semantic_keys = getattr(metric, "semantic_keys", ())
+    if semantic_keys and len(semantic_keys) > 1:
+        props[SEMANTIC_PROPS["semanticKeys"]] = json.dumps(list(semantic_keys))
+
+    if metric.unit:
+        props[SEMANTIC_PROPS["unit"]] = metric.unit
+
+    if metric.aas_type:
+        props[SEMANTIC_PROPS["aasType"]] = metric.aas_type
+
+    if metric.aas_source:
+        props[SEMANTIC_PROPS["aasSource"]] = metric.aas_source
+
+    # Include submodel context if available
+    submodel_id = getattr(metric, "submodel_semantic_id", None)
+    if submodel_id:
+        props[SEMANTIC_PROPS["submodelSemanticId"]] = submodel_id
+
+    if fidelity_score is not None:
+        props[SEMANTIC_PROPS["fidelityScore"]] = fidelity_score
+
+    return props
+
+
+def build_semantic_properties_from_context(
+    context: SemanticContext,
+    include_hash: bool = True,
+) -> dict[str, Any]:
+    """Build semantic PropertySet from a SemanticContext.
+
+    Args:
+        context: The semantic context.
+        include_hash: Whether to include the hash pointer.
+
+    Returns:
+        Dictionary of property key-value pairs.
+    """
+    props: dict[str, Any] = {
+        SEMANTIC_PROPS["semanticId"]: context.semantic_id,
+        SEMANTIC_PROPS["semanticDictionary"]: context.dictionary,
+        SEMANTIC_PROPS["semanticVersion"]: context.version,
+    }
+
+    if include_hash:
+        props[SEMANTIC_PROPS["semanticHash"]] = context.hash
+
+    if context.unit:
+        props[SEMANTIC_PROPS["unit"]] = context.unit
+
+    if len(context.hierarchy) > 1:
+        props[SEMANTIC_PROPS["semanticKeys"]] = json.dumps(list(context.hierarchy))
+
+    return props
 
 
 class PayloadBuilder:
@@ -32,7 +153,7 @@ class PayloadBuilder:
         self._payload = spb.Payload()
         self._payload.timestamp = int(time.time() * 1000)
 
-    def set_timestamp(self, timestamp_ms: int) -> "PayloadBuilder":
+    def set_timestamp(self, timestamp_ms: int) -> PayloadBuilder:
         """Set the payload timestamp.
 
         Args:
@@ -41,7 +162,7 @@ class PayloadBuilder:
         self._payload.timestamp = timestamp_ms
         return self
 
-    def set_seq(self, seq: int) -> "PayloadBuilder":
+    def set_seq(self, seq: int) -> PayloadBuilder:
         """Set the sequence number.
 
         Args:
@@ -59,7 +180,7 @@ class PayloadBuilder:
         datatype: SparkplugDataType | None = None,
         is_null: bool = False,
         properties: dict[str, Any] | None = None,
-    ) -> "PayloadBuilder":
+    ) -> PayloadBuilder:
         """Add a metric to the payload.
 
         Args:
@@ -165,7 +286,7 @@ class PayloadBuilder:
         timestamp_ms: int | None = None,
         alias: int | None = None,
         properties: dict[str, Any] | None = None,
-    ) -> "PayloadBuilder":
+    ) -> PayloadBuilder:
         """Add a metric with XSD type conversion.
 
         Args:
@@ -185,6 +306,48 @@ class PayloadBuilder:
             datatype=datatype,
             is_null=value is None,
             properties=properties,
+        )
+
+    def add_metric_with_semantic_props(
+        self,
+        metric: ContextMetric,
+        alias: int | None = None,
+        fidelity_score: float | None = None,
+        additional_props: dict[str, Any] | None = None,
+    ) -> PayloadBuilder:
+        """Add a metric with standardized semantic PropertySet.
+
+        Convenience method that extracts semantic metadata from a ContextMetric
+        and includes it in the Sparkplug PropertySet using the AAS namespace
+        convention.
+
+        Args:
+            metric: The context metric to add.
+            alias: Optional numeric alias.
+            fidelity_score: Optional fidelity score to include.
+            additional_props: Additional properties to merge.
+
+        Returns:
+            Self for method chaining.
+        """
+        # Build semantic properties
+        semantic_props = build_semantic_properties(metric, fidelity_score)
+
+        # Merge additional properties if provided
+        if additional_props:
+            semantic_props.update(additional_props)
+
+        # Determine datatype from XSD type
+        datatype = xsd_to_sparkplug_type(metric.value_type)
+
+        return self.add_metric(
+            name=metric.path,
+            value=metric.value,
+            timestamp_ms=metric.timestamp_ms if metric.timestamp_ms else None,
+            alias=alias,
+            datatype=datatype,
+            is_null=metric.value is None,
+            properties=semantic_props if semantic_props else None,
         )
 
     def build(self) -> bytes:

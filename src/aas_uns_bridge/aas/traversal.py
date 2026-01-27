@@ -12,14 +12,41 @@ from aas_uns_bridge.domain.models import ContextMetric
 logger = logging.getLogger(__name__)
 
 
+def _extract_semantic_references(element: model.HasSemantics) -> tuple[str, ...]:
+    """Extract ALL semantic keys from an element.
+
+    AAS elements can have composite semantic references pointing to multiple
+    concepts in different dictionaries. This function extracts all keys
+    to support poly-hierarchical semantic resolution.
+
+    Args:
+        element: An AAS element with potential semantic references.
+
+    Returns:
+        Tuple of all semantic key values (may be empty).
+    """
+    if element.semantic_id is None:
+        return ()
+    keys = list(element.semantic_id.key)
+    if not keys:
+        return ()
+    return tuple(str(k.value) for k in keys if k.value is not None)
+
+
 def _extract_semantic_id(element: model.HasSemantics) -> str | None:
-    """Extract semantic ID from an element if present."""
-    if element.semantic_id is not None:
-        keys = list(element.semantic_id.key)
-        if keys:
-            value = keys[0].value
-            return str(value) if value is not None else None
-    return None
+    """Extract primary semantic ID from an element if present.
+
+    This function returns only the first key for backward compatibility.
+    Use _extract_semantic_references() to get all keys.
+
+    Args:
+        element: An AAS element with potential semantic references.
+
+    Returns:
+        The first semantic key value, or None if not present.
+    """
+    keys = _extract_semantic_references(element)
+    return keys[0] if keys else None
 
 
 def _extract_unit(element: model.HasDataSpecification) -> str | None:
@@ -102,6 +129,7 @@ def _flatten_element(
     aas_source: str,
     timestamp_ms: int,
     preferred_lang: str,
+    submodel_semantic_id: str | None = None,
 ) -> Iterator[ContextMetric]:
     """Recursively flatten a submodel element into metrics.
 
@@ -111,6 +139,7 @@ def _flatten_element(
         aas_source: Source identifier (file path or URL).
         timestamp_ms: Extraction timestamp.
         preferred_lang: Preferred language for MultiLanguageProperty.
+        submodel_semantic_id: Semantic ID of the parent submodel.
 
     Yields:
         ContextMetric for each leaf element.
@@ -127,7 +156,12 @@ def _flatten_element(
     if isinstance(element, model.SubmodelElementCollection):
         for child in element.value or []:
             yield from _flatten_element(
-                child, current_path, aas_source, timestamp_ms, preferred_lang
+                child,
+                current_path,
+                aas_source,
+                timestamp_ms,
+                preferred_lang,
+                submodel_semantic_id,
             )
         return
 
@@ -140,18 +174,29 @@ def _flatten_element(
                 # Nested structure in list
                 for nested in child.value or []:
                     yield from _flatten_element(
-                        nested, indexed_path, aas_source, timestamp_ms, preferred_lang
+                        nested,
+                        indexed_path,
+                        aas_source,
+                        timestamp_ms,
+                        preferred_lang,
+                        submodel_semantic_id,
                     )
             else:
                 # Leaf element in list
                 yield from _flatten_leaf(
-                    child, indexed_path, aas_source, timestamp_ms, preferred_lang
+                    child,
+                    indexed_path,
+                    aas_source,
+                    timestamp_ms,
+                    preferred_lang,
+                    submodel_semantic_id,
                 )
         return
 
     # Handle Range specially - emit min and max as separate metrics
     if isinstance(element, model.Range):
-        semantic_id = _extract_semantic_id(element)
+        semantic_keys = _extract_semantic_references(element)
+        semantic_id = semantic_keys[0] if semantic_keys else None
         unit = _extract_unit(element)
         value_type = _get_value_type(element)
 
@@ -165,6 +210,8 @@ def _flatten_element(
                 unit=unit,
                 aas_source=aas_source,
                 timestamp_ms=timestamp_ms,
+                semantic_keys=semantic_keys,
+                submodel_semantic_id=submodel_semantic_id,
             )
         if element.max is not None:
             yield ContextMetric(
@@ -176,11 +223,20 @@ def _flatten_element(
                 unit=unit,
                 aas_source=aas_source,
                 timestamp_ms=timestamp_ms,
+                semantic_keys=semantic_keys,
+                submodel_semantic_id=submodel_semantic_id,
             )
         return
 
     # Handle leaf elements (Property, MultiLanguageProperty, etc.)
-    yield from _flatten_leaf(element, current_path, aas_source, timestamp_ms, preferred_lang)
+    yield from _flatten_leaf(
+        element,
+        current_path,
+        aas_source,
+        timestamp_ms,
+        preferred_lang,
+        submodel_semantic_id,
+    )
 
 
 def _flatten_leaf(
@@ -189,12 +245,14 @@ def _flatten_leaf(
     aas_source: str,
     timestamp_ms: int,
     preferred_lang: str,
+    submodel_semantic_id: str | None = None,
 ) -> Iterator[ContextMetric]:
     """Create a metric from a leaf element."""
     aas_type = type(element).__name__
     value = _get_value(element, preferred_lang)
     value_type = _get_value_type(element)
-    semantic_id = _extract_semantic_id(element)
+    semantic_keys = _extract_semantic_references(element)
+    semantic_id = semantic_keys[0] if semantic_keys else None
     unit = _extract_unit(element)
 
     yield ContextMetric(
@@ -206,6 +264,8 @@ def _flatten_leaf(
         unit=unit,
         aas_source=aas_source,
         timestamp_ms=timestamp_ms,
+        semantic_keys=semantic_keys,
+        submodel_semantic_id=submodel_semantic_id,
     )
 
 
@@ -231,9 +291,17 @@ def flatten_submodel(
     metrics: list[ContextMetric] = []
     submodel_path = submodel.id_short or "unnamed"
 
+    # Extract submodel's semantic ID for context propagation
+    submodel_semantic_id = _extract_semantic_id(submodel)
+
     for element in submodel.submodel_element or []:
         for metric in _flatten_element(
-            element, submodel_path, aas_source, timestamp_ms, preferred_lang
+            element,
+            submodel_path,
+            aas_source,
+            timestamp_ms,
+            preferred_lang,
+            submodel_semantic_id,
         ):
             metrics.append(metric)
 

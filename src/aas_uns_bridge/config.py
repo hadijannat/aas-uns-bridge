@@ -206,6 +206,150 @@ class ObservabilityConfig(BaseModel):
     health_port: int = 8080
 
 
+# =============================================================================
+# Semantic Hypervisor Configuration
+# =============================================================================
+
+
+class ResolutionCacheConfig(BaseModel):
+    """Semantic resolution cache configuration."""
+
+    enabled: bool = False
+    """Enable semantic resolution cache."""
+
+    max_memory_entries: int = 10000
+    """Maximum entries in memory LRU cache."""
+
+    preload_on_startup: bool = True
+    """Preload existing entries from DB on startup."""
+
+
+class PointerConfig(BaseModel):
+    """Semantic pointer mode configuration."""
+
+    enabled: bool = False
+    """Enable pointer mode for payload reduction."""
+
+    mode: Literal["inline", "pointer", "hybrid"] = "inline"
+    """Payload mode: inline (legacy), pointer (90% reduction), hybrid."""
+
+    publish_context_topics: bool = True
+    """Publish full contexts to UNS/Sys/Context/{hash}."""
+
+    context_topic_prefix: str = "UNS/Sys/Context"
+    """Topic prefix for context distribution."""
+
+
+class IncrementalDriftConfig(BaseModel):
+    """Incremental drift detection configuration."""
+
+    enabled: bool = False
+    """Enable incremental drift detection with Half-Space Trees."""
+
+    use_half_space_trees: bool = True
+    """Use HST algorithm (vs. static fingerprinting)."""
+
+    window_size: int = 1000
+    """Sliding window size for streaming detection."""
+
+    num_trees: int = 25
+    """Number of trees in the Half-Space Forest."""
+
+    severity_thresholds: dict[str, float] = Field(
+        default_factory=lambda: {
+            "low": 0.3,
+            "medium": 0.5,
+            "high": 0.7,
+            "critical": 0.9,
+        }
+    )
+    """Anomaly score thresholds for severity levels."""
+
+    auto_accept_schema_evolution: bool = False
+    """Automatically accept schema evolution changes."""
+
+
+class FidelityConfig(BaseModel):
+    """Fidelity metrics configuration."""
+
+    enabled: bool = False
+    """Enable fidelity calculation."""
+
+    alert_threshold: float = 0.7
+    """Alert when fidelity drops below this threshold."""
+
+    weights: dict[str, float] = Field(
+        default_factory=lambda: {
+            "structural": 0.3,
+            "semantic": 0.5,
+            "entropy": 0.2,
+        }
+    )
+    """Weights for overall fidelity score components."""
+
+
+class BidirectionalConfig(BaseModel):
+    """Bidirectional sync (MQTT→AAS write-back) configuration."""
+
+    enabled: bool = False
+    """Enable bidirectional sync (DANGEROUS - off by default)."""
+
+    aas_repository_url: str = "http://localhost:8080"
+    """AAS repository REST API base URL."""
+
+    auth_token: SecretStr | None = None
+    """Bearer token for repository authentication."""
+
+    command_topic_suffix: str = "/cmd"
+    """Suffix identifying command topics."""
+
+    validate_before_write: bool = True
+    """Validate commands before executing writes."""
+
+    publish_confirmations: bool = True
+    """Publish ack/nak responses to command topics."""
+
+    allowed_write_patterns: list[str] = Field(
+        default_factory=lambda: ["*/Setpoints/*", "*/Configuration/*"]
+    )
+    """Glob patterns for allowed write paths."""
+
+    denied_write_patterns: list[str] = Field(
+        default_factory=lambda: ["*/Identification/*", "*/readonly/*"]
+    )
+    """Glob patterns for denied write paths (checked first)."""
+
+
+class HypervisorConfig(BaseModel):
+    """Semantic Hypervisor configuration.
+
+    The Hypervisor transforms the bridge into an intelligent semantic
+    layer with:
+    - 90% payload reduction via semantic pointers
+    - Incremental drift detection with severity classification
+    - Information-theoretic fidelity metrics
+    - Optional bidirectional AAS synchronization
+    """
+
+    resolution_cache: ResolutionCacheConfig = Field(default_factory=ResolutionCacheConfig)
+    """Semantic resolution cache settings."""
+
+    pointer: PointerConfig = Field(default_factory=PointerConfig)
+    """Pointer mode settings for payload reduction."""
+
+    incremental_drift: IncrementalDriftConfig = Field(default_factory=IncrementalDriftConfig)
+    """Incremental drift detection settings."""
+
+    fidelity: FidelityConfig = Field(default_factory=FidelityConfig)
+    """Fidelity metrics settings."""
+
+    bidirectional: BidirectionalConfig = Field(default_factory=BidirectionalConfig)
+    """Bidirectional sync settings."""
+
+    extract_all_semantic_keys: bool = False
+    """Extract all semantic keys for poly-hierarchical references."""
+
+
 class BridgeConfig(BaseModel):
     """Root configuration for the AAS-UNS Bridge."""
 
@@ -217,6 +361,7 @@ class BridgeConfig(BaseModel):
     state: StateConfig = Field(default_factory=StateConfig)
     observability: ObservabilityConfig = Field(default_factory=ObservabilityConfig)
     semantic: SemanticConfig = Field(default_factory=SemanticConfig)
+    hypervisor: HypervisorConfig = Field(default_factory=HypervisorConfig)
     preferred_language: str = "en"
 
     @classmethod

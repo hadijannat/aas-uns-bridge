@@ -1,6 +1,7 @@
 """Main daemon orchestration for the AAS-UNS Bridge."""
 
 import hashlib
+import json
 import logging
 import signal
 import threading
@@ -15,20 +16,27 @@ from watchdog.observers import Observer
 
 from aas_uns_bridge.aas.loader import load_file
 from aas_uns_bridge.aas.repo_client import AASRepoClient
+from aas_uns_bridge.aas.repository_client import AasRepositoryClient
 from aas_uns_bridge.aas.traversal import flatten_submodel, iter_submodels
 from aas_uns_bridge.config import BridgeConfig
 from aas_uns_bridge.domain.models import ContextMetric
 from aas_uns_bridge.mapping.isa95 import ISA95Mapper, MappingConfig
+from aas_uns_bridge.mapping.sanitize import sanitize_segment
 from aas_uns_bridge.mqtt.client import MqttClient
 from aas_uns_bridge.observability.health import HealthServer, create_health_checker
 from aas_uns_bridge.observability.metrics import METRICS, MetricsServer
+from aas_uns_bridge.publishers.context_publisher import ContextPublisher
 from aas_uns_bridge.publishers.sparkplug import SparkplugPublisher
 from aas_uns_bridge.publishers.uns_retained import UnsRetainedPublisher
+from aas_uns_bridge.semantic.fidelity import FidelityCalculator
+from aas_uns_bridge.semantic.resolution_cache import SemanticResolutionCache
 from aas_uns_bridge.state.alias_db import AliasDB
 from aas_uns_bridge.state.asset_lifecycle import AssetLifecycleTracker
 from aas_uns_bridge.state.birth_cache import BirthCache
 from aas_uns_bridge.state.drift_detector import DriftDetector
 from aas_uns_bridge.state.last_published import LastPublishedHashes
+from aas_uns_bridge.state.streaming_drift import IncrementalDriftDetector
+from aas_uns_bridge.sync.bidirectional import BidirectionalSync
 from aas_uns_bridge.validation import SemanticValidator
 
 logger = logging.getLogger(__name__)
@@ -133,6 +141,11 @@ class BridgeDaemon:
             state_dir / "hashes.db" if config.state.deduplicate_publishes else None
         )
 
+        # Alert rate-limiting state (cooldown to prevent alert spam)
+        self._last_fidelity_alert: dict[str, float] = {}
+        self._last_drift_alert: dict[str, float] = {}
+        self._alert_cooldown_seconds = 300.0  # 5 minutes between alerts per asset
+
         # Semantic enforcement components
         self.validator: SemanticValidator | None = None
         self.drift_detector: DriftDetector | None = None
@@ -156,6 +169,60 @@ class BridgeDaemon:
             )
             logger.info("Asset lifecycle tracking enabled")
 
+        # Hypervisor components (semantic context management)
+        self.resolution_cache: SemanticResolutionCache | None = None
+        self.fidelity_calculator: FidelityCalculator | None = None
+        self.streaming_drift: IncrementalDriftDetector | None = None
+
+        if config.hypervisor.resolution_cache.enabled:
+            self.resolution_cache = SemanticResolutionCache(
+                state_dir / "semantic_cache.db",
+                max_memory_entries=config.hypervisor.resolution_cache.max_memory_entries,
+                preload=config.hypervisor.resolution_cache.preload_on_startup,
+            )
+            logger.info(
+                "Semantic resolution cache enabled (max %d entries)",
+                config.hypervisor.resolution_cache.max_memory_entries,
+            )
+
+        if config.hypervisor.fidelity.enabled:
+            self.fidelity_calculator = FidelityCalculator(
+                db_path=state_dir / "fidelity.db",
+                weights=config.hypervisor.fidelity.weights,
+            )
+            logger.info(
+                "Fidelity calculator enabled (alert threshold: %.2f)",
+                config.hypervisor.fidelity.alert_threshold,
+            )
+
+        if config.hypervisor.incremental_drift.enabled:
+            self.streaming_drift = IncrementalDriftDetector(
+                db_path=state_dir / "streaming_drift.db",
+                window_size=config.hypervisor.incremental_drift.window_size,
+                num_trees=config.hypervisor.incremental_drift.num_trees,
+                severity_thresholds=config.hypervisor.incremental_drift.severity_thresholds,
+            )
+            logger.info(
+                "Streaming drift detector enabled (window=%d, trees=%d)",
+                config.hypervisor.incremental_drift.window_size,
+                config.hypervisor.incremental_drift.num_trees,
+            )
+
+        # Bidirectional sync (MQTT→AAS write-back)
+        self.bidirectional_sync: BidirectionalSync | None = None
+        self._aas_write_client: AasRepositoryClient | None = None
+
+        if config.hypervisor.bidirectional.enabled:
+            self._aas_write_client = AasRepositoryClient(
+                base_url=config.hypervisor.bidirectional.aas_repository_url,
+                auth_token=(
+                    config.hypervisor.bidirectional.auth_token.get_secret_value()
+                    if config.hypervisor.bidirectional.auth_token
+                    else None
+                ),
+            )
+            # Note: BidirectionalSync initialization deferred until MQTT client exists
+
         # MQTT client
         self.mqtt_client = MqttClient(
             config.mqtt,
@@ -163,14 +230,55 @@ class BridgeDaemon:
             on_disconnect=self._on_mqtt_disconnect,
         )
 
+        # Context publisher for pointer mode (must be created before UNS publisher)
+        self.context_publisher: ContextPublisher | None = None
+        if config.hypervisor.pointer.enabled and config.hypervisor.pointer.publish_context_topics:
+            self.context_publisher = ContextPublisher(
+                mqtt_client=self.mqtt_client,
+                topic_prefix=config.hypervisor.pointer.context_topic_prefix,
+                qos=config.uns.qos,
+            )
+            logger.info(
+                "Context publisher enabled (prefix: %s)",
+                config.hypervisor.pointer.context_topic_prefix,
+            )
+
+        # Determine payload mode
+        payload_mode = (
+            config.hypervisor.pointer.mode if config.hypervisor.pointer.enabled else "inline"
+        )
+
         # Publishers
-        self.uns_publisher = UnsRetainedPublisher(self.mqtt_client, config.uns, config.semantic)
+        self.uns_publisher = UnsRetainedPublisher(
+            mqtt_client=self.mqtt_client,
+            config=config.uns,
+            semantic_config=config.semantic,
+            resolution_cache=self.resolution_cache,
+            context_publisher=self.context_publisher,
+            payload_mode=payload_mode,
+        )
         self.sparkplug_publisher = SparkplugPublisher(
             self.mqtt_client,
             config.sparkplug,
             self.alias_db,
             birth_cache=self.birth_cache,
         )
+
+        # Initialize bidirectional sync now that MQTT client exists
+        if self._aas_write_client:
+            self.bidirectional_sync = BidirectionalSync(
+                mqtt_client=self.mqtt_client,
+                aas_client=self._aas_write_client,
+                command_topic_suffix=config.hypervisor.bidirectional.command_topic_suffix,
+                allowed_patterns=config.hypervisor.bidirectional.allowed_write_patterns,
+                denied_patterns=config.hypervisor.bidirectional.denied_write_patterns,
+                validate_before_write=config.hypervisor.bidirectional.validate_before_write,
+                publish_confirmations=config.hypervisor.bidirectional.publish_confirmations,
+            )
+            logger.info(
+                "Bidirectional sync enabled (repository: %s)",
+                config.hypervisor.bidirectional.aas_repository_url,
+            )
 
         # Observability servers
         self.metrics_server = MetricsServer(config.observability.metrics_port)
@@ -386,6 +494,10 @@ class BridgeDaemon:
             if self.drift_detector and global_asset_id:
                 self._check_and_handle_drift(global_asset_id, metrics)
 
+            # Streaming (incremental) drift detection for numeric values
+            if self.streaming_drift and global_asset_id:
+                self._check_streaming_drift(global_asset_id, metrics)
+
             # Semantic validation (sQoS level 1+)
             if self.validator:
                 result = self.validator.validate_batch(metrics)
@@ -442,6 +554,10 @@ class BridgeDaemon:
         # Update lifecycle tracking for processed assets
         if self.lifecycle_tracker:
             self._update_lifecycle_for_assets(processed_assets)
+
+        # Calculate and record fidelity for processed assets
+        if self.fidelity_calculator and device_metrics_all:
+            self._calculate_fidelity_for_assets(device_metrics_all)
 
         # Publish Sparkplug after gathering per-device metrics
         if self.config.sparkplug.enabled:
@@ -548,6 +664,135 @@ class BridgeDaemon:
         METRICS.assets_stale.set(self.lifecycle_tracker.stale_count)
         METRICS.assets_offline.set(self.lifecycle_tracker.offline_count)
 
+    def _calculate_fidelity_for_assets(
+        self, device_metrics: dict[str, list[ContextMetric]]
+    ) -> None:
+        """Calculate fidelity metrics for processed assets.
+
+        Args:
+            device_metrics: Mapping of device ID to their metrics.
+        """
+        if not self.fidelity_calculator:
+            return
+
+        for asset_id, metrics in device_metrics.items():
+            if not metrics:
+                continue
+
+            report = self.fidelity_calculator.calculate_asset_fidelity(asset_id, metrics)
+            METRICS.fidelity_evaluations_total.inc()
+            METRICS.fidelity_overall.labels(asset_id=asset_id).set(report.overall_score)
+            METRICS.fidelity_structural.labels(asset_id=asset_id).set(report.structural_fidelity)
+            METRICS.fidelity_semantic.labels(asset_id=asset_id).set(report.semantic_fidelity)
+            METRICS.fidelity_entropy_loss.labels(asset_id=asset_id).set(report.entropy_loss)
+
+            # Check if below alert threshold (with rate-limiting)
+            if (
+                self.config.hypervisor.fidelity.alert_threshold > 0
+                and report.overall_score < self.config.hypervisor.fidelity.alert_threshold
+            ):
+                now = time.time()
+                last_alert = self._last_fidelity_alert.get(asset_id, 0)
+
+                # Only alert if cooldown period has passed
+                if now - last_alert >= self._alert_cooldown_seconds:
+                    self._last_fidelity_alert[asset_id] = now
+
+                    rec_text = (
+                        ", ".join(report.recommendations[:2])
+                        if report.recommendations
+                        else "no recommendations"
+                    )
+                    logger.warning(
+                        "Fidelity alert for %s: %.2f (grade %s) - %s",
+                        asset_id,
+                        report.overall_score,
+                        report.grade,
+                        rec_text,
+                    )
+
+                    # Publish MQTT alert
+                    if self.mqtt_client.is_connected():
+                        alert_topic = f"UNS/Sys/FidelityAlerts/{self._sanitize_asset_id(asset_id)}"
+                        alert_payload = json.dumps(report.to_dict()).encode()
+                        try:
+                            self.mqtt_client.publish(
+                                alert_topic, alert_payload, qos=1, retain=False
+                            )
+                        except Exception as e:
+                            logger.error("Failed to publish fidelity alert: %s", e)
+
+    def _check_streaming_drift(self, asset_id: str, metrics: list[ContextMetric]) -> None:
+        """Check for streaming drift using incremental detector.
+
+        Args:
+            asset_id: The asset identifier.
+            metrics: Current metrics for the asset.
+        """
+        if not self.streaming_drift:
+            return
+
+        drift_results = self.streaming_drift.detect_batch(asset_id, metrics)
+
+        for result in drift_results:
+            METRICS.streaming_drift_detected_total.labels(
+                drift_type=result.drift_type.value,
+                severity=result.severity.value,
+            ).inc()
+            METRICS.streaming_drift_anomaly_score.labels(asset_id=asset_id).set(
+                result.anomaly_score
+            )
+
+            if result.is_drift:
+                logger.info(
+                    "Streaming drift for %s: %s (%s, confidence %.2f) - action: %s",
+                    asset_id,
+                    result.drift_type.value,
+                    result.severity.value,
+                    result.confidence,
+                    result.suggested_action,
+                )
+
+                # Publish MQTT alert for HIGH/CRITICAL severity (with rate-limiting)
+                if (
+                    result.severity.value in ("high", "critical")
+                    and self.mqtt_client.is_connected()
+                ):
+                    now = time.time()
+                    last_alert = self._last_drift_alert.get(asset_id, 0)
+
+                    # Only alert if cooldown period has passed
+                    if now - last_alert >= self._alert_cooldown_seconds:
+                        self._last_drift_alert[asset_id] = now
+
+                        alert_topic = (
+                            f"UNS/Sys/StreamingDriftAlerts/{self._sanitize_asset_id(asset_id)}"
+                        )
+                        alert_payload = json.dumps(result.to_dict()).encode()
+                        try:
+                            self.mqtt_client.publish(
+                                alert_topic, alert_payload, qos=1, retain=False
+                            )
+                        except Exception as e:
+                            logger.error("Failed to publish streaming drift alert: %s", e)
+
+    def _sanitize_asset_id(self, asset_id: str) -> str:
+        """Sanitize asset ID for use in MQTT topics.
+
+        Removes URL schemes, replaces path separators, and handles
+        MQTT special characters (+, #) and whitespace.
+
+        Args:
+            asset_id: The raw asset identifier.
+
+        Returns:
+            MQTT-safe topic segment.
+        """
+        # Remove URL schemes first
+        cleaned = asset_id.replace("https://", "").replace("http://", "").replace(":", "_")
+        # Use sanitize_segment to handle MQTT wildcards, whitespace, etc.
+        return sanitize_segment(cleaned)
+
     def _check_stale_assets(self) -> None:
         """Check for stale assets and update their state."""
         if not self.lifecycle_tracker:
@@ -599,6 +844,13 @@ class BridgeDaemon:
 
         # Connect to MQTT
         self.mqtt_client.connect()
+
+        # Subscribe to command topics for bidirectional sync
+        if self.bidirectional_sync and self.config.uns.root_topic:
+            # Ensure proper wildcard format: "root/#" not "root#"
+            root = self.config.uns.root_topic.rstrip("/")
+            base_pattern = f"{root}/#" if root else "#"
+            self.bidirectional_sync.subscribe_command_topics([base_pattern])
 
         # Start file watcher
         if self._observer:
@@ -665,9 +917,11 @@ class BridgeDaemon:
         # Disconnect MQTT (triggers NDEATH via LWT)
         self.mqtt_client.disconnect()
 
-        # Close repository client
+        # Close repository clients
         if self._repo_client:
             self._repo_client.close()
+        if self._aas_write_client:
+            self._aas_write_client.close()
 
         # Stop observability servers
         self.health_server.stop()
