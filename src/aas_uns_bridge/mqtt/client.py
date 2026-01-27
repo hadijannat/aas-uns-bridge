@@ -107,13 +107,14 @@ class MqttClient:
         properties: Any | None,
     ) -> None:
         """Handle connection callback."""
-        reason_code_enum = getattr(mqtt, "ReasonCode", None)
-        success_code = (
-            reason_code_enum(MQTTErrorCode.MQTT_ERR_SUCCESS)
-            if reason_code_enum is not None
-            else MQTTErrorCode.MQTT_ERR_SUCCESS
+        # In paho-mqtt 2.0 with MQTTv5, reason_code is a ReasonCode object
+        # Success is value 0, or the object has is_failure=False
+        is_success = (
+            reason_code == 0
+            or (hasattr(reason_code, "value") and reason_code.value == 0)
+            or (hasattr(reason_code, "is_failure") and not reason_code.is_failure)
         )
-        if reason_code == success_code:
+        if is_success:
             logger.info("Connected to MQTT broker %s:%d", self.config.host, self.config.port)
             self._connected.set()
             self._reconnect_delay = self.config.reconnect_delay_min

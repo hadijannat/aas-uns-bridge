@@ -235,7 +235,7 @@ jobs:
     runs-on: ubuntu-latest
     if: always()
     steps:
-      - name: Check required jobs passed
+      - name: Check all jobs passed
         env:
           LINT_RESULT: ${{ needs.lint.result }}
           UNIT_RESULT: ${{ needs.unit-tests.result }}
@@ -251,26 +251,25 @@ jobs:
           echo "  Sparkplug: $SPARKPLUG_RESULT"
           echo ""
 
-          # Required gates (must pass)
           if [ "$LINT_RESULT" != "success" ]; then
-            echo "❌ Lint job failed - this is a required gate"
+            echo "❌ Lint job failed"
             exit 1
           fi
           if [ "$UNIT_RESULT" != "success" ]; then
-            echo "❌ Unit tests failed - this is a required gate"
+            echo "❌ Unit tests failed"
+            exit 1
+          fi
+          if [ "$INTEGRATION_RESULT" != "success" ]; then
+            echo "❌ Integration tests failed"
+            exit 1
+          fi
+          if [ "$E2E_RESULT" != "success" ]; then
+            echo "❌ E2E tests failed"
+            exit 1
+          fi
+          if [ "$SPARKPLUG_RESULT" = "failure" ]; then
+            echo "❌ Sparkplug compliance failed"
             exit 1
           fi
 
-          # Informational gates (warn but don't block)
-          if [ "$INTEGRATION_RESULT" != "success" ]; then
-            echo "⚠️  Integration tests failed (requires MQTT broker)"
-          fi
-          if [ "$E2E_RESULT" != "success" ]; then
-            echo "⚠️  E2E tests failed (requires MQTT broker)"
-          fi
-          if [ "$SPARKPLUG_RESULT" != "success" ]; then
-            echo "⚠️  Sparkplug compliance tests failed (requires MQTT broker)"
-          fi
-
-          echo ""
-          echo "✅ Required checks (lint, unit-tests) passed!"
+          echo "✅ All required checks passed!"
