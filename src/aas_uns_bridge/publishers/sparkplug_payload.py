@@ -116,7 +116,11 @@ class PayloadBuilder:
             SparkplugDataType.UInt32,
         ):
             metric.int_value = int(value)
-        elif datatype in (SparkplugDataType.Int64, SparkplugDataType.UInt64, SparkplugDataType.DateTime):
+        elif datatype in (
+            SparkplugDataType.Int64,
+            SparkplugDataType.UInt64,
+            SparkplugDataType.DateTime,
+        ):
             metric.long_value = int(value)
         elif datatype == SparkplugDataType.Float:
             metric.float_value = float(value)

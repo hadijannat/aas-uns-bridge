@@ -1,5 +1,6 @@
 """Tests for handling malformed AAS files."""
 
+import contextlib
 import json
 import logging
 from pathlib import Path
@@ -7,7 +8,7 @@ from tempfile import NamedTemporaryFile
 
 import pytest
 
-from aas_uns_bridge.aas.loader import load_json, load_file, AASLoadError
+from aas_uns_bridge.aas.loader import AASLoadError, load_file, load_json
 from aas_uns_bridge.aas.traversal import flatten_submodel, iter_submodels
 from aas_uns_bridge.domain.models import ContextMetric
 
@@ -32,7 +33,7 @@ class TestMissingSemanticId:
         # BaSyx may or may not load the submodels depending on strictness
         # Traverse and flatten whatever is available
         metrics_found: list[ContextMetric] = []
-        for submodel, asset_id in iter_submodels(object_store):
+        for submodel, _asset_id in iter_submodels(object_store):
             metrics = flatten_submodel(submodel, str(malformed_path))
             metrics_found.extend(metrics)
 
@@ -40,9 +41,7 @@ class TestMissingSemanticId:
         if len(metrics_found) > 0:
             # Some metrics should have None semanticId (the fixture has no semanticId)
             without_semantic = [m for m in metrics_found if m.semantic_id is None]
-            assert len(without_semantic) > 0, (
-                "Should have metrics without semanticId"
-            )
+            assert len(without_semantic) > 0, "Should have metrics without semanticId"
         # If BaSyx rejected the file, that's also acceptable behavior
         # for a "malformed" fixture - the test passes either way
 
@@ -58,7 +57,7 @@ class TestMissingSemanticId:
 
         object_store = load_json(malformed_path)
 
-        for submodel, asset_id in iter_submodels(object_store):
+        for submodel, _asset_id in iter_submodels(object_store):
             metrics = flatten_submodel(submodel, str(malformed_path))
 
             for metric in metrics:
@@ -87,7 +86,7 @@ class TestEmptyCollection:
         object_store = load_json(malformed_path)
 
         # Traverse should not raise
-        for submodel, asset_id in iter_submodels(object_store):
+        for submodel, _asset_id in iter_submodels(object_store):
             # Should not raise even with empty collections
             metrics = flatten_submodel(submodel, str(malformed_path))
 
@@ -106,7 +105,7 @@ class TestEmptyCollection:
 
         object_store = load_json(malformed_path)
 
-        for submodel, asset_id in iter_submodels(object_store):
+        for submodel, _asset_id in iter_submodels(object_store):
             metrics = flatten_submodel(submodel, str(malformed_path))
 
             # Should find the ValidProperty
@@ -132,12 +131,10 @@ class TestMissingIdShort:
         try:
             object_store = load_json(malformed_path)
 
-            for submodel, asset_id in iter_submodels(object_store):
+            for submodel, _asset_id in iter_submodels(object_store):
                 metrics = flatten_submodel(submodel, str(malformed_path))
-
-                # Look for "unnamed" in paths
-                unnamed_metrics = [m for m in metrics if "unnamed" in m.path.lower()]
-                # It's OK if BaSyx rejects these - just verify we don't crash
+                if metrics:
+                    assert any("unnamed" in m.path.lower() for m in metrics)
         except AASLoadError:
             # BaSyx may reject invalid structures - that's acceptable
             pass
@@ -161,7 +158,11 @@ class TestInvalidJson:
             load_json(malformed_path)
 
         # Error should mention JSON or parsing
-        assert "json" in str(exc_info.value).lower() or "parse" in str(exc_info.value).lower() or "failed" in str(exc_info.value).lower()
+        assert (
+            "json" in str(exc_info.value).lower()
+            or "parse" in str(exc_info.value).lower()
+            or "failed" in str(exc_info.value).lower()
+        )
 
     def test_completely_malformed_content(self) -> None:
         """Completely malformed content should be rejected gracefully."""
@@ -241,11 +242,8 @@ class TestLoggingOnMalformed:
         if not malformed_path.exists():
             pytest.skip("Malformed fixture not found")
 
-        with caplog.at_level(logging.DEBUG):
-            try:
-                load_json(malformed_path)
-            except AASLoadError:
-                pass  # Expected
+        with caplog.at_level(logging.DEBUG), contextlib.suppress(AASLoadError):
+            load_json(malformed_path)
 
         # Should have logged something (may be at different levels)
         # The actual logging happens in the exception handling
@@ -305,7 +303,7 @@ class TestGracefulDegradation:
             object_store = load_json(temp_path)
 
             # Should extract the valid property
-            for submodel, asset_id in iter_submodels(object_store):
+            for submodel, _asset_id in iter_submodels(object_store):
                 metrics = flatten_submodel(submodel, str(temp_path))
                 assert len(metrics) > 0, "Should extract valid properties"
         finally:

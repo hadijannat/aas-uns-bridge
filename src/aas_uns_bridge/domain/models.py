@@ -14,7 +14,10 @@ class ContextMetric:
     """
 
     path: str
-    """Dot-separated path from submodel root (e.g., 'TechnicalData.GeneralInformation.ManufacturerName')."""
+    """Dot-separated path from submodel root.
+
+    Example: 'TechnicalData.GeneralInformation.ManufacturerName'.
+    """
 
     value: Any
     """The metric value (string, int, float, bool, or None)."""
@@ -66,9 +69,7 @@ class AssetIdentity:
 
     def topic_prefix(self) -> str:
         """Build the UNS topic prefix from non-empty hierarchy levels."""
-        parts = [
-            p for p in [self.enterprise, self.site, self.area, self.line, self.asset] if p
-        ]
+        parts = [p for p in [self.enterprise, self.site, self.area, self.line, self.asset] if p]
         return "/".join(parts)
 
 

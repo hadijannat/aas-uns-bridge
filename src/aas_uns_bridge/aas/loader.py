@@ -5,7 +5,8 @@ import logging
 from pathlib import Path
 
 from basyx.aas import model
-from basyx.aas.adapter import aasx, json as aas_json
+from basyx.aas.adapter import aasx
+from basyx.aas.adapter import json as aas_json
 
 logger = logging.getLogger(__name__)
 

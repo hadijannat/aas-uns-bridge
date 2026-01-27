@@ -110,7 +110,8 @@ def generate_aasx_from_json(json_path: Path, aasx_path: Path) -> None:
     """
     try:
         from basyx.aas import model
-        from basyx.aas.adapter import aasx, json as aas_json
+        from basyx.aas.adapter import aasx
+        from basyx.aas.adapter import json as aas_json
 
         # Load JSON into object store
         object_store: model.DictObjectStore = model.DictObjectStore()

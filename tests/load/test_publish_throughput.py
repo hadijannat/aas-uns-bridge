@@ -1,7 +1,6 @@
 """Load tests for publish throughput."""
 
 import gc
-import os
 import resource
 import time
 from pathlib import Path
@@ -11,11 +10,11 @@ import pytest
 
 from aas_uns_bridge.aas.loader import load_json
 from aas_uns_bridge.aas.traversal import flatten_submodel, iter_submodels
-from aas_uns_bridge.config import MqttConfig, UnsConfig, SparkplugConfig
+from aas_uns_bridge.config import MqttConfig, SparkplugConfig, UnsConfig
 from aas_uns_bridge.domain.models import ContextMetric
 from aas_uns_bridge.mqtt.client import MqttClient
-from aas_uns_bridge.publishers.uns_retained import UnsRetainedPublisher
 from aas_uns_bridge.publishers.sparkplug import SparkplugPublisher
+from aas_uns_bridge.publishers.uns_retained import UnsRetainedPublisher
 from aas_uns_bridge.state.alias_db import AliasDB
 
 
@@ -55,7 +54,7 @@ class TestPublishThroughput:
         # Flatten all metrics
         start_flatten = time.time()
         all_metrics: list[ContextMetric] = []
-        for submodel, asset_id in iter_submodels(object_store):
+        for submodel, _asset_id in iter_submodels(object_store):
             metrics = flatten_submodel(submodel, str(large_aas_path))
             all_metrics.extend(metrics)
         flatten_time = time.time() - start_flatten
@@ -68,7 +67,7 @@ class TestPublishThroughput:
         mqtt_client.connect(timeout=10)
 
         start_publish = time.time()
-        for i, metric in enumerate(all_metrics):
+        for _i, metric in enumerate(all_metrics):
             topic = f"LoadTest/Performance/context/Data/{metric.path}"
             publisher.publish_metric(topic, metric)
 
@@ -99,7 +98,7 @@ class TestPublishThroughput:
             # Load and flatten
             object_store = load_json(large_aas_path)
             all_metrics: list[ContextMetric] = []
-            for submodel, asset_id in iter_submodels(object_store):
+            for submodel, _asset_id in iter_submodels(object_store):
                 metrics = flatten_submodel(submodel, str(large_aas_path))
                 all_metrics.extend(metrics)
 
@@ -139,7 +138,7 @@ class TestMemoryStability:
         # Load AAS once
         object_store = load_json(large_aas_path)
         all_metrics: list[ContextMetric] = []
-        for submodel, asset_id in iter_submodels(object_store):
+        for submodel, _asset_id in iter_submodels(object_store):
             metrics = flatten_submodel(submodel, str(large_aas_path))
             all_metrics.extend(metrics)
 

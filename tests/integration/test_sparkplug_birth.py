@@ -1,6 +1,6 @@
 """Integration tests for Sparkplug B birth messages."""
 
-import json
+import contextlib
 import threading
 import time
 from pathlib import Path
@@ -11,7 +11,7 @@ import pytest
 from aas_uns_bridge.config import MqttConfig, SparkplugConfig
 from aas_uns_bridge.domain.models import ContextMetric
 from aas_uns_bridge.mqtt.client import MqttClient
-from aas_uns_bridge.publishers.sparkplug import SparkplugPublisher, SPARKPLUG_NAMESPACE
+from aas_uns_bridge.publishers.sparkplug import SPARKPLUG_NAMESPACE, SparkplugPublisher
 from aas_uns_bridge.state.alias_db import AliasDB
 
 
@@ -82,11 +82,13 @@ class TestSparkplugBirthIntegration:
         receive_event = threading.Event()
 
         # Subscribe first
-        sub_client = MqttClient(MqttConfig(
-            host=mqtt_config.host,
-            port=mqtt_config.port,
-            client_id=f"sub-{time.time()}",
-        ))
+        sub_client = MqttClient(
+            MqttConfig(
+                host=mqtt_config.host,
+                port=mqtt_config.port,
+                client_id=f"sub-{time.time()}",
+            )
+        )
 
         def on_message(topic: str, payload: bytes) -> None:
             received_topics.append(topic)
@@ -94,7 +96,10 @@ class TestSparkplugBirthIntegration:
 
         try:
             sub_client.connect(timeout=10)
-            sub_client.subscribe(f"{SPARKPLUG_NAMESPACE}/{sparkplug_config.group_id}/#", on_message)
+            sub_client.subscribe(
+                f"{SPARKPLUG_NAMESPACE}/{sparkplug_config.group_id}/#",
+                on_message,
+            )
             time.sleep(0.5)
 
             # Now publish NBIRTH
@@ -109,7 +114,10 @@ class TestSparkplugBirthIntegration:
             assert receive_event.wait(timeout=5), "Did not receive NBIRTH"
 
             # Verify topic format
-            expected_topic = f"{SPARKPLUG_NAMESPACE}/{sparkplug_config.group_id}/NBIRTH/{sparkplug_config.edge_node_id}"
+            expected_topic = (
+                f"{SPARKPLUG_NAMESPACE}/{sparkplug_config.group_id}/NBIRTH/"
+                f"{sparkplug_config.edge_node_id}"
+            )
             assert expected_topic in received_topics
 
         finally:
@@ -130,11 +138,13 @@ class TestSparkplugBirthIntegration:
         receive_event = threading.Event()
         device_id = "TestDevice001"
 
-        sub_client = MqttClient(MqttConfig(
-            host=mqtt_config.host,
-            port=mqtt_config.port,
-            client_id=f"sub-{time.time()}",
-        ))
+        sub_client = MqttClient(
+            MqttConfig(
+                host=mqtt_config.host,
+                port=mqtt_config.port,
+                client_id=f"sub-{time.time()}",
+            )
+        )
 
         def on_message(topic: str, payload: bytes) -> None:
             received_topics.append(topic)
@@ -143,7 +153,10 @@ class TestSparkplugBirthIntegration:
 
         try:
             sub_client.connect(timeout=10)
-            sub_client.subscribe(f"{SPARKPLUG_NAMESPACE}/{sparkplug_config.group_id}/#", on_message)
+            sub_client.subscribe(
+                f"{SPARKPLUG_NAMESPACE}/{sparkplug_config.group_id}/#",
+                on_message,
+            )
             time.sleep(0.5)
 
             alias_db = AliasDB(temp_db)
@@ -156,7 +169,10 @@ class TestSparkplugBirthIntegration:
 
             assert receive_event.wait(timeout=5), "Did not receive DBIRTH"
 
-            expected_topic = f"{SPARKPLUG_NAMESPACE}/{sparkplug_config.group_id}/DBIRTH/{sparkplug_config.edge_node_id}/{device_id}"
+            expected_topic = (
+                f"{SPARKPLUG_NAMESPACE}/{sparkplug_config.group_id}/DBIRTH/"
+                f"{sparkplug_config.edge_node_id}/{device_id}"
+            )
             assert expected_topic in received_topics
 
         finally:
@@ -188,17 +204,22 @@ class TestSparkplugBirthIntegration:
 
             # Subscribe AFTER publish
             received_messages: list[str] = []
-            sub_client = MqttClient(MqttConfig(
-                host=mqtt_config.host,
-                port=mqtt_config.port,
-                client_id=f"late-sub-{time.time()}",
-            ))
+            sub_client = MqttClient(
+                MqttConfig(
+                    host=mqtt_config.host,
+                    port=mqtt_config.port,
+                    client_id=f"late-sub-{time.time()}",
+                )
+            )
 
             def on_message(topic: str, payload: bytes) -> None:
                 received_messages.append(topic)
 
             sub_client.connect(timeout=10)
-            sub_client.subscribe(f"{SPARKPLUG_NAMESPACE}/{sparkplug_config.group_id}/#", on_message)
+            sub_client.subscribe(
+                f"{SPARKPLUG_NAMESPACE}/{sparkplug_config.group_id}/#",
+                on_message,
+            )
 
             # Wait briefly - should NOT receive retained message
             time.sleep(1)
@@ -209,10 +230,8 @@ class TestSparkplugBirthIntegration:
 
         finally:
             if "pub_client" in locals():
-                try:
+                with contextlib.suppress(Exception):
                     pub_client.disconnect()
-                except Exception:
-                    pass
             if "sub_client" in locals():
                 sub_client.disconnect()
 

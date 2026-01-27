@@ -90,10 +90,11 @@ class SparkplugPublisher:
         """Build an NDEATH payload with bdSeq metric."""
         try:
             from aas_uns_bridge.publishers.sparkplug_payload import build_ndeath_payload
+
             return build_ndeath_payload(self._bd_seq)
         except ImportError:
             # Fallback: simple JSON-like structure for testing
-            return b'{"bdSeq":' + str(self._bd_seq).encode() + b'}'
+            return b'{"bdSeq":' + str(self._bd_seq).encode() + b"}"
 
     def _build_payload_bytes(
         self,
@@ -142,6 +143,7 @@ class SparkplugPublisher:
         except ImportError:
             # Fallback: JSON for testing without protobuf
             import json
+
             payload = {
                 "timestamp": timestamp_ms or int(time.time() * 1000),
                 "seq": seq,
@@ -216,16 +218,18 @@ class SparkplugPublisher:
         metric_dicts: list[dict[str, Any]] = []
         for m in metrics:
             alias = self.alias_db.get_alias(f"{device_id}/{m.path}", device_id)
-            metric_dicts.append({
-                "name": m.path,
-                "value": m.value,
-                "value_type": m.value_type,
-                "timestamp_ms": m.timestamp_ms or timestamp_ms,
-                "alias": alias,
-                "semantic_id": m.semantic_id,
-                "unit": m.unit,
-                "aas_source": aas_uri or m.aas_source,
-            })
+            metric_dicts.append(
+                {
+                    "name": m.path,
+                    "value": m.value,
+                    "value_type": m.value_type,
+                    "timestamp_ms": m.timestamp_ms or timestamp_ms,
+                    "alias": alias,
+                    "semantic_id": m.semantic_id,
+                    "unit": m.unit,
+                    "aas_source": aas_uri or m.aas_source,
+                }
+            )
 
         payload = self._build_payload_bytes(metric_dicts, self._next_seq(), timestamp_ms)
         topic = self._build_topic("DBIRTH", device_id)
@@ -261,13 +265,15 @@ class SparkplugPublisher:
         metric_dicts: list[dict[str, Any]] = []
         for m in metrics:
             alias = self.alias_db.get_alias(f"{device_id}/{m.path}", device_id)
-            metric_dicts.append({
-                "name": "",  # Can be empty after birth
-                "value": m.value,
-                "value_type": m.value_type,
-                "timestamp_ms": m.timestamp_ms or timestamp_ms,
-                "alias": alias,
-            })
+            metric_dicts.append(
+                {
+                    "name": "",  # Can be empty after birth
+                    "value": m.value,
+                    "value_type": m.value_type,
+                    "timestamp_ms": m.timestamp_ms or timestamp_ms,
+                    "alias": alias,
+                }
+            )
 
         payload = self._build_payload_bytes(metric_dicts, self._next_seq(), timestamp_ms)
         topic = self._build_topic("DDATA", device_id)

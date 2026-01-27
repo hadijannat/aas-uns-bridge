@@ -8,10 +8,10 @@ MAX_SEGMENT_LENGTH = 64
 
 # Characters that are invalid in MQTT topic segments
 # + and # are wildcards, / is the level separator
-INVALID_CHARS = re.compile(r'[+#/\x00]')
+INVALID_CHARS = re.compile(r"[+#/\x00]")
 
 # Whitespace pattern for replacement
-WHITESPACE = re.compile(r'\s+')
+WHITESPACE = re.compile(r"\s+")
 
 
 def sanitize_segment(segment: str, max_length: int = MAX_SEGMENT_LENGTH) -> str:
@@ -60,7 +60,7 @@ def sanitize_segment(segment: str, max_length: int = MAX_SEGMENT_LENGTH) -> str:
     result = INVALID_CHARS.sub("_", result)
 
     # Collapse multiple underscores
-    result = re.sub(r'_+', '_', result)
+    result = re.sub(r"_+", "_", result)
 
     # Strip leading/trailing underscores
     result = result.strip("_")
@@ -68,7 +68,8 @@ def sanitize_segment(segment: str, max_length: int = MAX_SEGMENT_LENGTH) -> str:
     # Truncate to max length (preserving valid UTF-8)
     if len(result) > max_length:
         # Truncate carefully to avoid breaking UTF-8 sequences
-        result = result[:max_length].rsplit("_", 1)[0] if "_" in result[:max_length] else result[:max_length]
+        truncated = result[:max_length]
+        result = truncated.rsplit("_", 1)[0] if "_" in truncated else truncated
 
     # Ensure non-empty
     return result if result else "unnamed"
@@ -118,6 +119,6 @@ def sanitize_metric_path(path: str) -> str:
     topic_path = path.replace(".", "/")
 
     # Handle array indices: convert [0] to /0
-    topic_path = re.sub(r'\[(\d+)\]', r'/\1', topic_path)
+    topic_path = re.sub(r"\[(\d+)\]", r"/\1", topic_path)
 
     return sanitize_topic(topic_path)

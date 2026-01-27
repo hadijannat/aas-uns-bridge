@@ -3,7 +3,6 @@
 import fnmatch
 import logging
 from pathlib import Path
-from typing import Any
 
 import yaml
 from pydantic import BaseModel
@@ -175,7 +174,13 @@ class ISA95Mapper:
         # Add hierarchy levels if asset ID is known
         if global_asset_id:
             identity = self.get_identity(global_asset_id)
-            for level in [identity.enterprise, identity.site, identity.area, identity.line, identity.asset]:
+            for level in [
+                identity.enterprise,
+                identity.site,
+                identity.area,
+                identity.line,
+                identity.asset,
+            ]:
                 if level:
                     parts.append(level)
         else:
@@ -192,7 +197,7 @@ class ISA95Mapper:
         # Skip the submodel prefix if it's already in the path
         element_path = metric.path
         if element_path.startswith(f"{submodel_id_short}."):
-            element_path = element_path[len(submodel_id_short) + 1:]
+            element_path = element_path[len(submodel_id_short) + 1 :]
 
         sanitized_path = sanitize_metric_path(element_path)
         parts.append(sanitized_path)
@@ -215,7 +220,4 @@ class ISA95Mapper:
         Returns:
             Dict mapping topic paths to their metrics.
         """
-        return {
-            self.build_topic(m, global_asset_id, submodel_id_short): m
-            for m in metrics
-        }
+        return {self.build_topic(m, global_asset_id, submodel_id_short): m for m in metrics}

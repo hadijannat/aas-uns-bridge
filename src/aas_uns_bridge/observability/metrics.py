@@ -4,7 +4,7 @@ import threading
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from typing import Any
 
-from prometheus_client import Counter, Gauge, generate_latest, CONTENT_TYPE_LATEST
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, generate_latest
 
 
 # Metric definitions

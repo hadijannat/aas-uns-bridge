@@ -85,9 +85,7 @@ class TestISA95Mapper:
         assert identity.enterprise == "DefaultCorp"
         assert identity.site == "DefaultSite"
 
-    def test_build_topic(
-        self, sample_config: MappingConfig, sample_metric: ContextMetric
-    ) -> None:
+    def test_build_topic(self, sample_config: MappingConfig, sample_metric: ContextMetric) -> None:
         """Test topic construction."""
         mapper = ISA95Mapper(sample_config)
         topic = mapper.build_topic(
@@ -96,7 +94,10 @@ class TestISA95Mapper:
             submodel_id_short="TechnicalData",
         )
 
-        expected = "AcmeCorp/PlantA/Assembly/Line1/Robot001/context/TechnicalData/GeneralInfo/ManufacturerName"
+        expected = (
+            "AcmeCorp/PlantA/Assembly/Line1/Robot001/context/TechnicalData/"
+            "GeneralInfo/ManufacturerName"
+        )
         assert topic == expected
 
     def test_build_topic_with_root(
@@ -162,9 +163,7 @@ class TestISA95Mapper:
         assert " " not in topic
         assert "_" in topic  # Spaces converted to underscores
 
-    def test_build_topics_for_submodel(
-        self, sample_config: MappingConfig
-    ) -> None:
+    def test_build_topics_for_submodel(self, sample_config: MappingConfig) -> None:
         """Test building topics for multiple metrics."""
         mapper = ISA95Mapper(sample_config)
         metrics = [
@@ -189,4 +188,4 @@ class TestISA95Mapper:
         )
 
         assert len(topic_map) == 2
-        assert all("context/Submodel" in topic for topic in topic_map.keys())
+        assert all("context/Submodel" in topic for topic in topic_map)

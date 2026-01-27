@@ -5,6 +5,7 @@ import logging
 import signal
 import threading
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -152,6 +153,7 @@ class BridgeDaemon:
     def _init_logging(self) -> None:
         """Initialize logging configuration."""
         from aas_uns_bridge.observability.logging import setup_logging
+
         setup_logging(
             level=self.config.observability.log_level,
             format_type=self.config.observability.log_format,
@@ -278,9 +280,7 @@ class BridgeDaemon:
                 # Check if this is first time seeing this device
                 metrics_list = list(topic_metrics.values())
                 if device_id not in self._device_metrics:
-                    self.sparkplug_publisher.publish_dbirth(
-                        device_id, metrics_list, source
-                    )
+                    self.sparkplug_publisher.publish_dbirth(device_id, metrics_list, source)
                 else:
                     self.sparkplug_publisher.publish_ddata(device_id, metrics_list)
 
@@ -313,7 +313,8 @@ class BridgeDaemon:
             return
 
         for pattern in self.config.file_watcher.patterns:
-            for path in watch_dir.glob(f"**/{pattern}" if self.config.file_watcher.recursive else pattern):
+            glob_pattern = f"**/{pattern}" if self.config.file_watcher.recursive else pattern
+            for path in watch_dir.glob(glob_pattern):
                 try:
                     self._process_aas_file(path)
                 except Exception as e:

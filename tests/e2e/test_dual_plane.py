@@ -8,10 +8,10 @@ import pytest
 
 from aas_uns_bridge.aas.loader import load_json
 from aas_uns_bridge.aas.traversal import flatten_submodel, iter_submodels
-from aas_uns_bridge.config import MqttConfig, UnsConfig, SparkplugConfig
+from aas_uns_bridge.config import MqttConfig, SparkplugConfig, UnsConfig
 from aas_uns_bridge.mapping.isa95 import Isa95Mapper
 from aas_uns_bridge.mqtt.client import MqttClient
-from aas_uns_bridge.publishers.sparkplug import SparkplugPublisher, SPARKPLUG_NAMESPACE
+from aas_uns_bridge.publishers.sparkplug import SPARKPLUG_NAMESPACE, SparkplugPublisher
 from aas_uns_bridge.publishers.uns_retained import UnsRetainedPublisher
 from aas_uns_bridge.state.alias_db import AliasDB
 

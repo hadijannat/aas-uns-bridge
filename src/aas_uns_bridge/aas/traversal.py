@@ -2,7 +2,8 @@
 
 import logging
 import time
-from typing import Any, Iterator
+from collections.abc import Iterator
+from typing import Any
 
 from basyx.aas import model
 
@@ -48,9 +49,7 @@ def _get_value_type(element: model.SubmodelElement) -> str:
     }
 
     value_type = None
-    if isinstance(element, model.Property):
-        value_type = element.value_type
-    elif isinstance(element, model.Range):
+    if isinstance(element, (model.Property, model.Range)):
         value_type = element.value_type
 
     if value_type is not None:
@@ -87,7 +86,7 @@ def _get_value(element: model.SubmodelElement, preferred_lang: str = "en") -> An
             if preferred_lang in element.value:
                 return element.value[preferred_lang]
             # Fall back to first available
-            for lang, text in element.value.items():
+            for _lang, text in element.value.items():
                 return text
         return None
     elif isinstance(element, model.Range):
@@ -237,9 +236,7 @@ def flatten_submodel(
         ):
             metrics.append(metric)
 
-    logger.debug(
-        "Flattened submodel %s: %d metrics", submodel.id_short, len(metrics)
-    )
+    logger.debug("Flattened submodel %s: %d metrics", submodel.id_short, len(metrics))
     return metrics
 
 

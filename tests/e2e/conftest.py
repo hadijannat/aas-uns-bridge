@@ -2,14 +2,14 @@
 
 import os
 import time
+from collections.abc import Generator
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import Generator
 
 import paho.mqtt.client as mqtt
 import pytest
 
-from aas_uns_bridge.config import MqttConfig, UnsConfig, SparkplugConfig, BridgeConfig
+from aas_uns_bridge.config import MqttConfig, SparkplugConfig, UnsConfig
 from aas_uns_bridge.mqtt.client import MqttClient
 from aas_uns_bridge.state.alias_db import AliasDB
 
@@ -163,9 +163,7 @@ class MessageCollector:
     def __init__(self) -> None:
         self.messages: list[tuple[str, bytes, bool]] = []
 
-    def on_message(
-        self, client: mqtt.Client, userdata: object, msg: mqtt.MQTTMessage
-    ) -> None:
+    def on_message(self, client: mqtt.Client, userdata: object, msg: mqtt.MQTTMessage) -> None:
         """Handle received message."""
         self.messages.append((msg.topic, msg.payload, msg.retain))
 
@@ -192,7 +190,9 @@ def message_collector() -> MessageCollector:
 
 
 @pytest.fixture
-def subscriber_client(mqtt_config: MqttConfig, require_broker: None) -> Generator[mqtt.Client, None, None]:
+def subscriber_client(
+    mqtt_config: MqttConfig, require_broker: None
+) -> Generator[mqtt.Client, None, None]:
     """Create a raw paho MQTT client for subscribing.
 
     Automatically skips test if broker is not available.
@@ -220,9 +220,7 @@ def cleanup_retained_messages(
     """
     retained_topics: list[str] = []
 
-    def on_message(
-        client: mqtt.Client, userdata: object, msg: mqtt.MQTTMessage
-    ) -> None:
+    def on_message(client: mqtt.Client, userdata: object, msg: mqtt.MQTTMessage) -> None:
         if msg.retain:
             retained_topics.append(msg.topic)
 

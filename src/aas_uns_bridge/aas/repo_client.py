@@ -76,10 +76,7 @@ class AASRepoClient:
         content_hash = self._compute_hash(response.content)
         old_hash = self._hashes.get(url)
         self._hashes[url] = content_hash
-        if old_hash and old_hash == content_hash:
-            return False
-
-        return True
+        return not (old_hash and old_hash == content_hash)
 
     def list_shells(self) -> list[dict[str, Any]]:
         """List all Asset Administration Shells in the repository.

@@ -1,6 +1,5 @@
 """Unit tests for AAS submodel traversal."""
 
-import pytest
 from basyx.aas import model
 from basyx.aas.model.base import MultiLanguageTextType
 
@@ -25,7 +24,9 @@ def create_multilang_property(id_short: str, values: dict[str, str]) -> model.Mu
     )
 
 
-def create_collection(id_short: str, elements: list[model.SubmodelElement]) -> model.SubmodelElementCollection:
+def create_collection(
+    id_short: str, elements: list[model.SubmodelElement]
+) -> model.SubmodelElementCollection:
     """Helper to create a SubmodelElementCollection."""
     return model.SubmodelElementCollection(
         id_short=id_short,
@@ -71,13 +72,19 @@ class TestFlattenSubmodel:
             id_="https://example.com/sm/nested",
             id_short="TechnicalData",
             submodel_element=[
-                create_collection("GeneralInformation", [
-                    create_property("ManufacturerName", "Acme"),
-                    create_collection("Address", [
-                        create_property("Street", "123 Main St"),
-                        create_property("City", "Springfield"),
-                    ]),
-                ]),
+                create_collection(
+                    "GeneralInformation",
+                    [
+                        create_property("ManufacturerName", "Acme"),
+                        create_collection(
+                            "Address",
+                            [
+                                create_property("Street", "123 Main St"),
+                                create_property("City", "Springfield"),
+                            ],
+                        ),
+                    ],
+                ),
             ],
         )
 
@@ -95,10 +102,13 @@ class TestFlattenSubmodel:
             id_="https://example.com/sm/ml",
             id_short="Nameplate",
             submodel_element=[
-                create_multilang_property("ProductName", {
-                    "en": "Robot Arm",
-                    "de": "Roboterarm",
-                }),
+                create_multilang_property(
+                    "ProductName",
+                    {
+                        "en": "Robot Arm",
+                        "de": "Roboterarm",
+                    },
+                ),
             ],
         )
 
@@ -118,9 +128,12 @@ class TestFlattenSubmodel:
             id_="https://example.com/sm/ml",
             id_short="Nameplate",
             submodel_element=[
-                create_multilang_property("ProductName", {
-                    "de": "Roboterarm",
-                }),
+                create_multilang_property(
+                    "ProductName",
+                    {
+                        "de": "Roboterarm",
+                    },
+                ),
             ],
         )
 

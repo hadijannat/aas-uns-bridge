@@ -3,8 +3,8 @@
 import logging
 import ssl
 import threading
-import time
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 import paho.mqtt.client as mqtt
 from paho.mqtt.enums import CallbackAPIVersion, MQTTErrorCode
@@ -85,12 +85,16 @@ class MqttClient:
         if self.config.ca_cert and self.config.ca_cert.exists():
             context.load_verify_locations(str(self.config.ca_cert))
 
-        if self.config.client_cert and self.config.client_key:
-            if self.config.client_cert.exists() and self.config.client_key.exists():
-                context.load_cert_chain(
-                    certfile=str(self.config.client_cert),
-                    keyfile=str(self.config.client_key),
-                )
+        if (
+            self.config.client_cert
+            and self.config.client_key
+            and self.config.client_cert.exists()
+            and self.config.client_key.exists()
+        ):
+            context.load_cert_chain(
+                certfile=str(self.config.client_cert),
+                keyfile=str(self.config.client_key),
+            )
 
         self._client.tls_set_context(context)
 

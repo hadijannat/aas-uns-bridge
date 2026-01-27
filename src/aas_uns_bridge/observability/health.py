@@ -3,8 +3,9 @@
 import json
 import threading
 import time
-from http.server import HTTPServer, BaseHTTPRequestHandler
-from typing import Any, Callable
+from collections.abc import Callable
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from typing import Any
 
 
 class HealthHandler(BaseHTTPRequestHandler):
@@ -26,10 +27,7 @@ class HealthHandler(BaseHTTPRequestHandler):
 
     def _handle_health(self) -> None:
         """Handle /health endpoint."""
-        if self.check_func:
-            health = self.check_func()
-        else:
-            health = {"status": "unknown"}
+        health = self.check_func() if self.check_func else {"status": "unknown"}
 
         status_code = 200 if health.get("status") == "healthy" else 503
 
@@ -81,6 +79,7 @@ class HealthServer:
 
     def start(self) -> None:
         """Start the health server in a background thread."""
+
         # Create a handler class with the check function
         class Handler(HealthHandler):
             check_func = self._check_func

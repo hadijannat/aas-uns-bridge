@@ -15,8 +15,6 @@ from aas_uns_bridge.mapping.isa95 import Isa95Mapper
 from aas_uns_bridge.mqtt.client import MqttClient
 from aas_uns_bridge.publishers.uns_retained import UnsRetainedPublisher
 
-from .conftest import MessageCollector
-
 
 @pytest.mark.e2e
 class TestUnsTopicCorrectness:
@@ -78,7 +76,9 @@ class TestUnsTopicCorrectness:
 
         # All topics should start with the mapped enterprise
         for topic in received:
-            assert topic.startswith("AcmeCorp/PlantA/"), f"Topic should follow ISA-95 hierarchy: {topic}"
+            assert topic.startswith("AcmeCorp/PlantA/"), (
+                f"Topic should follow ISA-95 hierarchy: {topic}"
+            )
             assert "/context/" in topic, f"Topic should contain context segment: {topic}"
 
     def test_payload_schema_validation(
@@ -157,7 +157,9 @@ class TestUnsLateSubscriber:
         clean_broker: None,
     ) -> None:
         """Late subscriber should receive all retained messages."""
-        test_topic = f"TestEnterprise/TestSite/TestArea/TestLine/Asset/context/Data/Value-{time.time()}"
+        test_topic = (
+            f"TestEnterprise/TestSite/TestArea/TestLine/Asset/context/Data/Value-{time.time()}"
+        )
         test_metric = ContextMetric(
             path="Data.Value",
             value="TestValue",
@@ -251,7 +253,9 @@ class TestUnsLateSubscriber:
         late_client.disconnect()
 
         # Should receive all retained messages
-        assert len(received) == num_messages, f"Should receive {num_messages} retained messages, got {len(received)}"
+        assert len(received) == num_messages, (
+            f"Should receive {num_messages} retained messages, got {len(received)}"
+        )
 
 
 @pytest.mark.e2e

@@ -1,7 +1,5 @@
 """Unit tests for topic sanitization."""
 
-import pytest
-
 from aas_uns_bridge.mapping.sanitize import (
     sanitize_metric_path,
     sanitize_segment,
@@ -71,7 +69,9 @@ class TestSanitizeTopic:
 
     def test_segments_sanitized(self) -> None:
         """Test that each segment is sanitized."""
-        assert sanitize_topic("Level One/Level+Two/Level#Three") == "Level_One/Level_Two/Level_Three"
+        assert (
+            sanitize_topic("Level One/Level+Two/Level#Three") == "Level_One/Level_Two/Level_Three"
+        )
 
     def test_empty_segments_removed(self) -> None:
         """Test that empty segments are removed."""

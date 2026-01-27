@@ -11,7 +11,7 @@ from aas_uns_bridge.aas.traversal import flatten_submodel, iter_submodels
 from aas_uns_bridge.config import MqttConfig, SparkplugConfig
 from aas_uns_bridge.domain.models import ContextMetric
 from aas_uns_bridge.mqtt.client import MqttClient
-from aas_uns_bridge.publishers.sparkplug import SparkplugPublisher, SPARKPLUG_NAMESPACE
+from aas_uns_bridge.publishers.sparkplug import SPARKPLUG_NAMESPACE, SparkplugPublisher
 from aas_uns_bridge.state.alias_db import AliasDB
 
 
@@ -57,7 +57,10 @@ class TestSparkplugNBirth:
         pub_client.disconnect()
 
         # Verify NBIRTH received
-        expected_topic = f"{SPARKPLUG_NAMESPACE}/{sparkplug_config.group_id}/NBIRTH/{sparkplug_config.edge_node_id}"
+        expected_topic = (
+            f"{SPARKPLUG_NAMESPACE}/{sparkplug_config.group_id}/NBIRTH/"
+            f"{sparkplug_config.edge_node_id}"
+        )
         assert expected_topic in received_topics, f"Should receive NBIRTH on {expected_topic}"
 
     def test_nbirth_topic_format(

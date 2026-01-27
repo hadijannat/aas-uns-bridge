@@ -7,12 +7,10 @@ from tempfile import TemporaryDirectory
 import paho.mqtt.client as mqtt
 import pytest
 
-from aas_uns_bridge.aas.loader import load_json
-from aas_uns_bridge.aas.traversal import flatten_submodel, iter_submodels
 from aas_uns_bridge.config import MqttConfig, SparkplugConfig, UnsConfig
 from aas_uns_bridge.domain.models import ContextMetric
 from aas_uns_bridge.mqtt.client import MqttClient
-from aas_uns_bridge.publishers.sparkplug import SparkplugPublisher, SPARKPLUG_NAMESPACE
+from aas_uns_bridge.publishers.sparkplug import SPARKPLUG_NAMESPACE, SparkplugPublisher
 from aas_uns_bridge.publishers.uns_retained import UnsRetainedPublisher
 from aas_uns_bridge.state.alias_db import AliasDB
 
@@ -80,7 +78,7 @@ class TestBridgeRestartResilience:
             metric_path = "Data.Value"
 
             # Simulate 5 rapid restarts
-            for i in range(5):
+            for _i in range(5):
                 alias_db = AliasDB(db_path)
                 alias = alias_db.get_alias(f"{device_id}/{metric_path}", device_id)
                 all_aliases.append({metric_path: alias})
@@ -249,7 +247,7 @@ class TestChangeDetection:
         clean_broker: None,
     ) -> None:
         """Only changed metrics should be republished."""
-        base_topic = f"TestEnterprise/ChangeDetect/context/Data"
+        base_topic = "TestEnterprise/ChangeDetect/context/Data"
         published_topics: list[str] = []
 
         def on_msg(client: mqtt.Client, userdata: object, msg: mqtt.MQTTMessage) -> None:
@@ -403,9 +401,7 @@ class TestLongRunningResilience:
             for _ in range(10):
                 for path in metric_paths:
                     alias = alias_db.get_alias(f"{device_id}/{path}", device_id)
-                    assert alias == initial_aliases[path], (
-                        f"Alias for {path} should be stable"
-                    )
+                    assert alias == initial_aliases[path], f"Alias for {path} should be stable"
 
             # All aliases should be unique
             all_aliases = list(initial_aliases.values())

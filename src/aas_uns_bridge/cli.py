@@ -1,7 +1,7 @@
 """Command-line interface for the AAS-UNS Bridge."""
 
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated
 
 import typer
 
@@ -24,11 +24,11 @@ def callback() -> None:
 @app.command()
 def run(
     config: Annotated[
-        Optional[Path],
+        Path | None,
         typer.Option("--config", "-c", help="Path to config.yaml"),
     ] = None,
     mappings: Annotated[
-        Optional[Path],
+        Path | None,
         typer.Option("--mappings", "-m", help="Path to mappings.yaml"),
     ] = None,
 ) -> None:
@@ -48,11 +48,11 @@ def run(
 @app.command()
 def validate(
     config: Annotated[
-        Optional[Path],
+        Path | None,
         typer.Option("--config", "-c", help="Path to config.yaml"),
     ] = None,
     mappings: Annotated[
-        Optional[Path],
+        Path | None,
         typer.Option("--mappings", "-m", help="Path to mappings.yaml"),
     ] = None,
 ) -> None:
@@ -73,7 +73,7 @@ def validate(
         typer.echo(f"  Repo client: {cfg.repo_client.enabled}")
     except Exception as e:
         typer.echo(f"Configuration error: {e}", err=True)
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
 
 @app.command()
@@ -99,9 +99,9 @@ def status() -> None:
         else:
             typer.echo(f"Health check returned {resp.status_code}", err=True)
             raise typer.Exit(1)
-    except httpx.ConnectError:
+    except httpx.ConnectError as e:
         typer.echo("Bridge is not running or health endpoint unreachable", err=True)
-        raise typer.Exit(1)
+        raise typer.Exit(1) from e
 
 
 if __name__ == "__main__":
