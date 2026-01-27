@@ -20,9 +20,8 @@ from aas_uns_bridge.mapping.isa95 import ISA95Mapper, MappingConfig
 from aas_uns_bridge.mqtt.client import MqttClient
 from aas_uns_bridge.publishers.sparkplug import SparkplugPublisher
 from aas_uns_bridge.publishers.uns_retained import UnsRetainedPublisher
-
-from .state.alias_db import AliasDB
-from .state.last_published import LastPublishedHashes
+from aas_uns_bridge.state.alias_db import AliasDB
+from aas_uns_bridge.state.last_published import LastPublishedHashes
 
 logger = logging.getLogger(__name__)
 
