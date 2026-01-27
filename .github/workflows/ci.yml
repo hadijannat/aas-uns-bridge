@@ -69,13 +69,12 @@ jobs:
   integration-tests:
     name: Integration Tests
     runs-on: ubuntu-latest
-    services:
-      mosquitto:
-        image: eclipse-mosquitto:2
-        ports:
-          - 1883:1883
 
     steps:
+      - name: Start Mosquitto
+        run: |
+          docker run -d --name mosquitto -p 1883:1883 eclipse-mosquitto:2 \
+            mosquitto -c /dev/null -p 1883 -v
       - uses: actions/checkout@v4
 
       - name: Set up Python
@@ -115,14 +114,14 @@ jobs:
   e2e-tests:
     name: E2E Tests
     runs-on: ubuntu-latest
-    services:
-      mosquitto:
-        image: eclipse-mosquitto:2
-        ports:
-          - 1883:1883
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Start Mosquitto
+        run: |
+          docker run -d --name mosquitto -p 1883:1883 eclipse-mosquitto:2 \
+            mosquitto -c /dev/null -p 1883 -v
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -170,14 +169,14 @@ jobs:
   sparkplug-compliance:
     name: Sparkplug Compliance
     runs-on: ubuntu-latest
-    services:
-      mosquitto:
-        image: eclipse-mosquitto:2
-        ports:
-          - 1883:1883
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Start Mosquitto
+        run: |
+          docker run -d --name mosquitto -p 1883:1883 eclipse-mosquitto:2 \
+            mosquitto -c /dev/null -p 1883 -v
 
       - name: Set up Python
         uses: actions/setup-python@v5

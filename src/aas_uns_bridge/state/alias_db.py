@@ -3,8 +3,8 @@
 import logging
 import sqlite3
 import threading
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Iterator
 
 logger = logging.getLogger(__name__)
 

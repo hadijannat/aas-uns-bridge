@@ -9,7 +9,7 @@ import pytest
 from aas_uns_bridge.aas.loader import load_json
 from aas_uns_bridge.aas.traversal import flatten_submodel, iter_submodels
 from aas_uns_bridge.config import MqttConfig, SparkplugConfig, UnsConfig
-from aas_uns_bridge.mapping.isa95 import Isa95Mapper
+from aas_uns_bridge.mapping.isa95 import ISA95Mapper, MappingConfig
 from aas_uns_bridge.mqtt.client import MqttClient
 from aas_uns_bridge.publishers.sparkplug import SPARKPLUG_NAMESPACE, SparkplugPublisher
 from aas_uns_bridge.publishers.uns_retained import UnsRetainedPublisher
@@ -54,7 +54,7 @@ class TestDualPlaneConsistency:
 
         # Load AAS
         object_store = load_json(sample_robot_json)
-        mapper = Isa95Mapper.from_yaml(test_mappings_path)
+        mapper = ISA95Mapper(MappingConfig.from_yaml(test_mappings_path))
 
         # Create publishers
         mqtt_client = MqttClient(mqtt_config)
@@ -127,7 +127,7 @@ class TestDualPlaneConsistency:
 
         # Load AAS
         object_store = load_json(sample_sensor_json)
-        mapper = Isa95Mapper.from_yaml(test_mappings_path)
+        mapper = ISA95Mapper(MappingConfig.from_yaml(test_mappings_path))
 
         mqtt_client = MqttClient(mqtt_config)
         uns_publisher = UnsRetainedPublisher(mqtt_client, uns_config)

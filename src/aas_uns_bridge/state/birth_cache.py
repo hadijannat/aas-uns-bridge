@@ -1,6 +1,5 @@
 """Birth message caching for fast reconnection."""
 
-import json
 import logging
 import sqlite3
 from pathlib import Path

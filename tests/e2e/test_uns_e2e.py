@@ -11,7 +11,7 @@ from aas_uns_bridge.aas.loader import load_json
 from aas_uns_bridge.aas.traversal import flatten_submodel, iter_submodels
 from aas_uns_bridge.config import MqttConfig, UnsConfig
 from aas_uns_bridge.domain.models import ContextMetric
-from aas_uns_bridge.mapping.isa95 import Isa95Mapper
+from aas_uns_bridge.mapping.isa95 import ISA95Mapper, MappingConfig
 from aas_uns_bridge.mqtt.client import MqttClient
 from aas_uns_bridge.publishers.uns_retained import UnsRetainedPublisher
 
@@ -31,7 +31,7 @@ class TestUnsTopicCorrectness:
         """Verify topics match ISA-95 hierarchy from mappings."""
         # Load AAS and mappings
         object_store = load_json(sample_robot_json)
-        mapper = Isa95Mapper.from_yaml(test_mappings_path)
+        mapper = ISA95Mapper(MappingConfig.from_yaml(test_mappings_path))
 
         # Collect messages
         received: list[str] = []
@@ -91,7 +91,7 @@ class TestUnsTopicCorrectness:
     ) -> None:
         """Verify payload contains required schema fields."""
         object_store = load_json(sample_sensor_json)
-        mapper = Isa95Mapper.from_yaml(test_mappings_path)
+        mapper = ISA95Mapper(MappingConfig.from_yaml(test_mappings_path))
 
         received_payloads: list[tuple[str, bytes]] = []
 
