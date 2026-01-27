@@ -408,8 +408,8 @@ class TestEntityElement:
         paths = {m.path: m.value for m in metrics}
         assert paths["Assets.Component.entityType"] == "SELF_MANAGED_ENTITY"
         assert paths["Assets.Component.globalAssetId"] == "https://example.com/asset/component-001"
-        assert paths["Assets.Component.SerialNumber.SerialNumber"] == "SN12345"
-        assert paths["Assets.Component.Status.Status"] == "Active"
+        assert paths["Assets.Component.SerialNumber"] == "SN12345"
+        assert paths["Assets.Component.Status"] == "Active"
 
     def test_entity_co_managed_without_asset_id(self) -> None:
         """Test CO_MANAGED_ENTITY without globalAssetId only emits entityType."""

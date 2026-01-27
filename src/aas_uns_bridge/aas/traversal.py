@@ -294,11 +294,12 @@ def _flatten_element(
             )
 
         # Recurse into statements (SubmodelElements)
+        # Pass current_path as prefix; _flatten_element will append stmt.id_short
         if element.statement:
             for stmt in element.statement:
                 yield from _flatten_element(
                     stmt,
-                    f"{current_path}.{stmt.id_short or 'unnamed'}",
+                    current_path,
                     aas_source,
                     timestamp_ms,
                     preferred_lang,
