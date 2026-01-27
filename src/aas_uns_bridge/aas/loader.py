@@ -2,7 +2,9 @@
 
 import json
 import logging
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any, cast
 
 from basyx.aas import model
 from basyx.aas.adapter import aasx
@@ -17,7 +19,7 @@ class AASLoadError(Exception):
     pass
 
 
-def load_aasx(path: Path) -> model.DictObjectStore:
+def load_aasx(path: Path) -> model.DictObjectStore[model.Identifiable]:
     """Load an AASX package file.
 
     Args:
@@ -33,16 +35,17 @@ def load_aasx(path: Path) -> model.DictObjectStore:
         raise AASLoadError(f"AASX file not found: {path}")
 
     try:
-        object_store: model.DictObjectStore = model.DictObjectStore()
+        object_store: model.DictObjectStore[model.Identifiable] = model.DictObjectStore()
+        file_store = aasx.DictSupplementaryFileContainer()  # type: ignore[no-untyped-call]
         with aasx.AASXReader(str(path)) as reader:
-            reader.read_into(object_store)
+            reader.read_into(object_store, file_store)
         logger.info("Loaded AASX: %s (%d objects)", path.name, len(object_store))
         return object_store
     except Exception as e:
         raise AASLoadError(f"Failed to load AASX {path}: {e}") from e
 
 
-def load_json(path: Path) -> model.DictObjectStore:
+def load_json(path: Path) -> model.DictObjectStore[model.Identifiable]:
     """Load an AAS JSON file.
 
     Args:
@@ -61,19 +64,23 @@ def load_json(path: Path) -> model.DictObjectStore:
         with open(path) as f:
             data = json.load(f)
 
-        object_store: model.DictObjectStore = model.DictObjectStore()
+        object_store: model.DictObjectStore[model.Identifiable] = model.DictObjectStore()
+        read_aas_json_file_into = cast(
+            Callable[[Any, str], Any],
+            aas_json.read_aas_json_file_into,  # type: ignore[attr-defined]
+        )
 
         # Handle both single-object and collection formats
         if isinstance(data, dict):
             if "assetAdministrationShells" in data or "submodels" in data:
                 # Environment format
-                aas_json.read_aas_json_file_into(object_store, str(path))
+                read_aas_json_file_into(object_store, str(path))
             else:
                 # Try as single object
-                aas_json.read_aas_json_file_into(object_store, str(path))
+                read_aas_json_file_into(object_store, str(path))
         elif isinstance(data, list):
             # List of objects
-            aas_json.read_aas_json_file_into(object_store, str(path))
+            read_aas_json_file_into(object_store, str(path))
         else:
             raise AASLoadError(f"Unexpected JSON structure in {path}")
 
@@ -85,7 +92,7 @@ def load_json(path: Path) -> model.DictObjectStore:
         raise AASLoadError(f"Failed to load JSON {path}: {e}") from e
 
 
-def load_file(path: Path) -> model.DictObjectStore:
+def load_file(path: Path) -> model.DictObjectStore[model.Identifiable]:
     """Load an AAS file (AASX or JSON) based on extension.
 
     Args:

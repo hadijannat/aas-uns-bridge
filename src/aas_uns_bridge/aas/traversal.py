@@ -17,7 +17,8 @@ def _extract_semantic_id(element: model.HasSemantics) -> str | None:
     if element.semantic_id is not None:
         keys = list(element.semantic_id.key)
         if keys:
-            return keys[0].value
+            value = keys[0].value
+            return str(value) if value is not None else None
     return None
 
 
@@ -29,7 +30,7 @@ def _extract_unit(element: model.HasDataSpecification) -> str | None:
     for spec in element.embedded_data_specifications or []:
         content = spec.data_specification_content
         if hasattr(content, "unit") and content.unit:
-            return content.unit
+            return str(content.unit)
     return None
 
 
@@ -248,7 +249,7 @@ def get_global_asset_id(aas: model.AssetAdministrationShell) -> str | None:
 
 
 def iter_submodels(
-    object_store: model.DictObjectStore,
+    object_store: model.DictObjectStore[model.Identifiable],
 ) -> Iterator[tuple[model.Submodel, str | None]]:
     """Iterate over all submodels in an object store with their asset IDs.
 

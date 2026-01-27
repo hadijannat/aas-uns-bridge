@@ -2,8 +2,9 @@
 
 import base64
 import hashlib
+import json
 import logging
-from typing import Any
+from typing import Any, cast
 
 import httpx
 from basyx.aas import model
@@ -93,8 +94,8 @@ class AASRepoClient:
             data = response.json()
             # Handle paged response format
             if isinstance(data, dict) and "result" in data:
-                return data["result"]
-            return data if isinstance(data, list) else []
+                return cast(list[dict[str, Any]], data["result"])
+            return cast(list[dict[str, Any]], data) if isinstance(data, list) else []
         except httpx.HTTPError as e:
             raise AASRepoClientError(f"Failed to list shells: {e}") from e
 
@@ -115,7 +116,7 @@ class AASRepoClient:
             response = self._client.get(url)
             response.raise_for_status()
             changed = self._has_changed(url, response)
-            return response.json(), changed
+            return cast(dict[str, Any], response.json()), changed
         except httpx.HTTPError as e:
             raise AASRepoClientError(f"Failed to get shell {aas_id}: {e}") from e
 
@@ -133,8 +134,8 @@ class AASRepoClient:
             response.raise_for_status()
             data = response.json()
             if isinstance(data, dict) and "result" in data:
-                return data["result"]
-            return data if isinstance(data, list) else []
+                return cast(list[dict[str, Any]], data["result"])
+            return cast(list[dict[str, Any]], data) if isinstance(data, list) else []
         except httpx.HTTPError as e:
             raise AASRepoClientError(f"Failed to list submodels: {e}") from e
 
@@ -155,11 +156,11 @@ class AASRepoClient:
             response = self._client.get(url)
             response.raise_for_status()
             changed = self._has_changed(url, response)
-            return response.json(), changed
+            return cast(dict[str, Any], response.json()), changed
         except httpx.HTTPError as e:
             raise AASRepoClientError(f"Failed to get submodel {submodel_id}: {e}") from e
 
-    def fetch_all(self) -> tuple[model.DictObjectStore, bool]:
+    def fetch_all(self) -> tuple[model.DictObjectStore[model.Identifiable], bool]:
         """Fetch all AAS content from the repository.
 
         Returns:
@@ -168,7 +169,7 @@ class AASRepoClient:
         Raises:
             AASRepoClientError: If fetching fails.
         """
-        object_store: model.DictObjectStore = model.DictObjectStore()
+        object_store: model.DictObjectStore[model.Identifiable] = model.DictObjectStore()
         any_changed = False
 
         # Fetch all shells
@@ -179,7 +180,15 @@ class AASRepoClient:
                 shell_data, changed = self.get_shell(shell_id)
                 any_changed = any_changed or changed
                 try:
-                    aas = aas_json.StrictAASFromJsonDecoder.decode(shell_data)
+                    decoder_cls = getattr(aas_json, "StrictAASFromJsonDecoder", None)
+                    if decoder_cls is None:
+                        logger.warning(
+                            "StrictAASFromJsonDecoder unavailable; skipping shell %s",
+                            shell_id,
+                        )
+                        continue
+                    decoder = decoder_cls()
+                    aas = decoder.decode(json.dumps(shell_data))
                     if isinstance(aas, model.AssetAdministrationShell):
                         object_store.add(aas)
                 except Exception as e:
@@ -193,7 +202,15 @@ class AASRepoClient:
                 sm_data, changed = self.get_submodel(sm_id)
                 any_changed = any_changed or changed
                 try:
-                    sm = aas_json.StrictAASFromJsonDecoder.decode(sm_data)
+                    decoder_cls = getattr(aas_json, "StrictAASFromJsonDecoder", None)
+                    if decoder_cls is None:
+                        logger.warning(
+                            "StrictAASFromJsonDecoder unavailable; skipping submodel %s",
+                            sm_id,
+                        )
+                        continue
+                    decoder = decoder_cls()
+                    sm = decoder.decode(json.dumps(sm_data))
                     if isinstance(sm, model.Submodel):
                         object_store.add(sm)
                 except Exception as e:

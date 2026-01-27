@@ -1,9 +1,8 @@
 """Sparkplug B payload builder using protobuf."""
 
+import importlib
 import time
-from typing import Any
-
-from google.protobuf.message import Message
+from typing import Any, cast
 
 from aas_uns_bridge.publishers.sparkplug_types import (
     SparkplugDataType,
@@ -13,10 +12,11 @@ from aas_uns_bridge.publishers.sparkplug_types import (
 
 # Import generated protobuf classes
 # These will be generated from sparkplug_b.proto
+spb: Any | None
 try:
-    from aas_uns_bridge.proto import sparkplug_b_pb2 as spb
-except ImportError:
-    spb = None  # type: ignore
+    spb = importlib.import_module("aas_uns_bridge.proto.sparkplug_b_pb2")
+except Exception:
+    spb = None
 
 
 class PayloadBuilder:
@@ -100,7 +100,7 @@ class PayloadBuilder:
 
     def _set_metric_value(
         self,
-        metric: Message,
+        metric: Any,
         value: Any,
         datatype: SparkplugDataType,
     ) -> None:
@@ -135,7 +135,7 @@ class PayloadBuilder:
             # Default to string
             metric.string_value = str(value)
 
-    def _add_properties(self, metric: Message, properties: dict[str, Any]) -> None:
+    def _add_properties(self, metric: Any, properties: dict[str, Any]) -> None:
         """Add a property set to a metric."""
         for key, value in properties.items():
             metric.properties.keys.append(key)
@@ -192,9 +192,9 @@ class PayloadBuilder:
         Returns:
             Serialized protobuf bytes.
         """
-        return self._payload.SerializeToString()
+        return cast(bytes, self._payload.SerializeToString())
 
-    def get_payload(self) -> Message:
+    def get_payload(self) -> Any:
         """Get the raw protobuf payload object."""
         return self._payload
 

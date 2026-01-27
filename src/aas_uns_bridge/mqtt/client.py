@@ -103,11 +103,17 @@ class MqttClient:
         client: mqtt.Client,
         userdata: Any,
         flags: mqtt.ConnectFlags,
-        reason_code: mqtt.ReasonCode,
-        properties: mqtt.Properties | None,
+        reason_code: Any,
+        properties: Any | None,
     ) -> None:
         """Handle connection callback."""
-        if reason_code == mqtt.ReasonCode(MQTTErrorCode.MQTT_ERR_SUCCESS):
+        reason_code_enum = getattr(mqtt, "ReasonCode", None)
+        success_code = (
+            reason_code_enum(MQTTErrorCode.MQTT_ERR_SUCCESS)
+            if reason_code_enum is not None
+            else MQTTErrorCode.MQTT_ERR_SUCCESS
+        )
+        if reason_code == success_code:
             logger.info("Connected to MQTT broker %s:%d", self.config.host, self.config.port)
             self._connected.set()
             self._reconnect_delay = self.config.reconnect_delay_min
@@ -128,8 +134,8 @@ class MqttClient:
         client: mqtt.Client,
         userdata: Any,
         disconnect_flags: mqtt.DisconnectFlags,
-        reason_code: mqtt.ReasonCode,
-        properties: mqtt.Properties | None,
+        reason_code: Any,
+        properties: Any | None,
     ) -> None:
         """Handle disconnection callback."""
         self._connected.clear()

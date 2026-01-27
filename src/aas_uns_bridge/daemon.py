@@ -138,7 +138,7 @@ class BridgeDaemon:
         )
 
         # File watcher
-        self._observer: Observer | None = None
+        self._observer: Any | None = None
         if config.file_watcher.enabled:
             self._setup_file_watcher()
 
@@ -171,7 +171,7 @@ class BridgeDaemon:
         )
 
         self._observer = Observer()
-        self._observer.schedule(
+        self._observer.schedule(  # type: ignore[no-untyped-call]
             handler,
             str(watch_dir),
             recursive=self.config.file_watcher.recursive,
