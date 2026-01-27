@@ -59,8 +59,8 @@ config/mappings.yaml
 !config/config.example.yaml
 !config/mappings.example.yaml
 
-# State files
-state/
+# State files (runtime, at project root)
+/state/
 *.db
 
 # Watch directory contents

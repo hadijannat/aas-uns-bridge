@@ -34,7 +34,7 @@ jobs:
         run: ruff format --check src tests
 
       - name: Run mypy
-        run: MYPYPATH=src mypy src
+        run: MYPYPATH=src mypy --config-file mypy.ini --explicit-package-bases --namespace-packages src
 
   unit-tests:
     name: Unit Tests
