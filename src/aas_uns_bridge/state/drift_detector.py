@@ -195,9 +195,7 @@ class DriftDetector:
             """)
             conn.commit()
 
-    def detect_drift(
-        self, asset_id: str, metrics: list[ContextMetric]
-    ) -> DriftDetectionResult:
+    def detect_drift(self, asset_id: str, metrics: list[ContextMetric]) -> DriftDetectionResult:
         """Detect drift for an asset's metrics.
 
         Compares provided metrics against stored fingerprints and returns
@@ -294,9 +292,7 @@ class DriftDetector:
 
         return DriftDetectionResult(asset_id=asset_id, events=events)
 
-    def update_fingerprints(
-        self, asset_id: str, metrics: list[ContextMetric]
-    ) -> None:
+    def update_fingerprints(self, asset_id: str, metrics: list[ContextMetric]) -> None:
         """Update stored fingerprints for an asset.
 
         Replaces all stored fingerprints for the asset with current metrics.
@@ -338,9 +334,7 @@ class DriftDetector:
 
             conn.commit()
 
-        logger.debug(
-            "Updated %d fingerprints for asset %s", len(metrics), asset_id
-        )
+        logger.debug("Updated %d fingerprints for asset %s", len(metrics), asset_id)
 
     def _load_fingerprints(self, asset_id: str) -> dict[str, MetricFingerprint]:
         """Load stored fingerprints for an asset.
@@ -382,9 +376,7 @@ class DriftDetector:
             List of asset identifiers.
         """
         with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute(
-                "SELECT DISTINCT asset_id FROM metric_fingerprints"
-            )
+            cursor = conn.execute("SELECT DISTINCT asset_id FROM metric_fingerprints")
             return [row[0] for row in cursor]
 
     def clear_asset(self, asset_id: str) -> int:

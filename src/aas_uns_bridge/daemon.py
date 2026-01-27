@@ -164,9 +164,7 @@ class BridgeDaemon:
         )
 
         # Publishers
-        self.uns_publisher = UnsRetainedPublisher(
-            self.mqtt_client, config.uns, config.semantic
-        )
+        self.uns_publisher = UnsRetainedPublisher(self.mqtt_client, config.uns, config.semantic)
         self.sparkplug_publisher = SparkplugPublisher(
             self.mqtt_client,
             config.sparkplug,
@@ -412,13 +410,9 @@ class BridgeDaemon:
             else:
                 METRICS.validation_metrics_total.labels(result="invalid").inc()
                 for error in vr.errors:
-                    METRICS.validation_errors_total.labels(
-                        error_type=error.error_type.value
-                    ).inc()
+                    METRICS.validation_errors_total.labels(error_type=error.error_type.value).inc()
 
-    def _check_and_handle_drift(
-        self, asset_id: str, metrics: list[ContextMetric]
-    ) -> None:
+    def _check_and_handle_drift(self, asset_id: str, metrics: list[ContextMetric]) -> None:
         """Check for schema drift and publish alerts if detected.
 
         Args:
@@ -441,9 +435,7 @@ class BridgeDaemon:
 
             # Record metrics and publish alerts
             for event in result.events:
-                METRICS.drift_events_total.labels(
-                    event_type=event.event_type.value
-                ).inc()
+                METRICS.drift_events_total.labels(event_type=event.event_type.value).inc()
 
                 # Publish alert to UNS
                 if self.mqtt_client.is_connected():
@@ -469,9 +461,7 @@ class BridgeDaemon:
         for asset_id in asset_ids:
             event = self.lifecycle_tracker.mark_online(asset_id)
             if event:
-                METRICS.asset_lifecycle_events_total.labels(
-                    state=event.new_state.value
-                ).inc()
+                METRICS.asset_lifecycle_events_total.labels(state=event.new_state.value).inc()
 
                 # Publish lifecycle event if configured
                 if self.config.semantic.lifecycle.publish_lifecycle_events:
@@ -494,9 +484,7 @@ class BridgeDaemon:
 
         events = self.lifecycle_tracker.check_stale_assets()
         for event in events:
-            METRICS.asset_lifecycle_events_total.labels(
-                state=event.new_state.value
-            ).inc()
+            METRICS.asset_lifecycle_events_total.labels(state=event.new_state.value).inc()
 
             # Publish lifecycle event if configured
             if self.config.semantic.lifecycle.publish_lifecycle_events:

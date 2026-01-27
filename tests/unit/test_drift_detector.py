@@ -198,9 +198,7 @@ class TestDriftDetectorRemovals:
 class TestDriftDetectorChanges:
     """Tests for detecting metric changes."""
 
-    def test_detect_type_change(
-        self, temp_db: Path, basic_config: DriftConfig
-    ) -> None:
+    def test_detect_type_change(self, temp_db: Path, basic_config: DriftConfig) -> None:
         """Test detecting value_type change."""
         detector = DriftDetector(temp_db, basic_config)
         asset_id = "https://example.com/asset/001"
@@ -229,9 +227,7 @@ class TestDriftDetectorChanges:
         assert len(result.changes) == 1
         assert result.events[0].event_type == DriftEventType.TYPE_CHANGED
 
-    def test_detect_unit_change(
-        self, temp_db: Path, basic_config: DriftConfig
-    ) -> None:
+    def test_detect_unit_change(self, temp_db: Path, basic_config: DriftConfig) -> None:
         """Test detecting unit change."""
         detector = DriftDetector(temp_db, basic_config)
         asset_id = "https://example.com/asset/001"
@@ -261,9 +257,7 @@ class TestDriftDetectorChanges:
         assert result.has_drift
         assert result.events[0].event_type == DriftEventType.UNIT_CHANGED
 
-    def test_detect_semantic_id_change(
-        self, temp_db: Path, basic_config: DriftConfig
-    ) -> None:
+    def test_detect_semantic_id_change(self, temp_db: Path, basic_config: DriftConfig) -> None:
         """Test detecting semantic ID change."""
         detector = DriftDetector(temp_db, basic_config)
         asset_id = "https://example.com/asset/001"

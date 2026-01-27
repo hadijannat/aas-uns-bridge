@@ -46,9 +46,7 @@ def short_threshold_config() -> LifecycleConfig:
 class TestAssetOnline:
     """Tests for marking assets online."""
 
-    def test_mark_online_new_asset(
-        self, temp_db: Path, basic_config: LifecycleConfig
-    ) -> None:
+    def test_mark_online_new_asset(self, temp_db: Path, basic_config: LifecycleConfig) -> None:
         """Test marking a new asset as online."""
         tracker = AssetLifecycleTracker(temp_db, basic_config)
         asset_id = "https://example.com/asset/001"
@@ -61,9 +59,7 @@ class TestAssetOnline:
         assert event.new_state == AssetState.ONLINE
         assert event.reason == "first_seen"
 
-    def test_mark_online_with_topic(
-        self, temp_db: Path, basic_config: LifecycleConfig
-    ) -> None:
+    def test_mark_online_with_topic(self, temp_db: Path, basic_config: LifecycleConfig) -> None:
         """Test marking online with a topic."""
         tracker = AssetLifecycleTracker(temp_db, basic_config)
         asset_id = "https://example.com/asset/001"
@@ -107,9 +103,7 @@ class TestAssetOnline:
 class TestAssetOffline:
     """Tests for marking assets offline."""
 
-    def test_mark_offline(
-        self, temp_db: Path, basic_config: LifecycleConfig
-    ) -> None:
+    def test_mark_offline(self, temp_db: Path, basic_config: LifecycleConfig) -> None:
         """Test marking an asset as offline."""
         tracker = AssetLifecycleTracker(temp_db, basic_config)
         asset_id = "https://example.com/asset/001"
@@ -135,9 +129,7 @@ class TestAssetOffline:
 
         assert event is None
 
-    def test_mark_offline_unknown_asset(
-        self, temp_db: Path, basic_config: LifecycleConfig
-    ) -> None:
+    def test_mark_offline_unknown_asset(self, temp_db: Path, basic_config: LifecycleConfig) -> None:
         """Test marking an unknown asset as offline."""
         tracker = AssetLifecycleTracker(temp_db, basic_config)
 
@@ -166,9 +158,7 @@ class TestStaleDetection:
         assert events[0].new_state == AssetState.STALE
         assert "no_data_for" in events[0].reason
 
-    def test_online_asset_not_stale(
-        self, temp_db: Path, basic_config: LifecycleConfig
-    ) -> None:
+    def test_online_asset_not_stale(self, temp_db: Path, basic_config: LifecycleConfig) -> None:
         """Test that recently active asset is not stale."""
         tracker = AssetLifecycleTracker(temp_db, basic_config)
         asset_id = "https://example.com/asset/001"
@@ -198,9 +188,7 @@ class TestStaleDetection:
 class TestAssetStatusQueries:
     """Tests for querying asset status."""
 
-    def test_get_asset_status(
-        self, temp_db: Path, basic_config: LifecycleConfig
-    ) -> None:
+    def test_get_asset_status(self, temp_db: Path, basic_config: LifecycleConfig) -> None:
         """Test getting status of a single asset."""
         tracker = AssetLifecycleTracker(temp_db, basic_config)
         asset_id = "https://example.com/asset/001"
@@ -213,9 +201,7 @@ class TestAssetStatusQueries:
         assert status.state == AssetState.ONLINE
         assert "topic1" in status.topics
 
-    def test_get_all_assets(
-        self, temp_db: Path, basic_config: LifecycleConfig
-    ) -> None:
+    def test_get_all_assets(self, temp_db: Path, basic_config: LifecycleConfig) -> None:
         """Test getting all tracked assets."""
         tracker = AssetLifecycleTracker(temp_db, basic_config)
 
@@ -228,9 +214,7 @@ class TestAssetStatusQueries:
         assert "asset1" in all_assets
         assert "asset2" in all_assets
 
-    def test_get_assets_by_state(
-        self, temp_db: Path, basic_config: LifecycleConfig
-    ) -> None:
+    def test_get_assets_by_state(self, temp_db: Path, basic_config: LifecycleConfig) -> None:
         """Test filtering assets by state."""
         tracker = AssetLifecycleTracker(temp_db, basic_config)
 
@@ -246,9 +230,7 @@ class TestAssetStatusQueries:
         assert len(offline) == 1
         assert offline[0].asset_id == "asset1"
 
-    def test_get_topics_for_asset(
-        self, temp_db: Path, basic_config: LifecycleConfig
-    ) -> None:
+    def test_get_topics_for_asset(self, temp_db: Path, basic_config: LifecycleConfig) -> None:
         """Test getting topics for an asset."""
         tracker = AssetLifecycleTracker(temp_db, basic_config)
         asset_id = "https://example.com/asset/001"
@@ -264,9 +246,7 @@ class TestAssetStatusQueries:
 class TestAssetCounts:
     """Tests for asset count properties."""
 
-    def test_count_properties(
-        self, temp_db: Path, short_threshold_config: LifecycleConfig
-    ) -> None:
+    def test_count_properties(self, temp_db: Path, short_threshold_config: LifecycleConfig) -> None:
         """Test online/stale/offline count properties."""
         tracker = AssetLifecycleTracker(temp_db, short_threshold_config)
 
@@ -284,9 +264,7 @@ class TestAssetCounts:
 class TestLifecycleEventTopics:
     """Tests for lifecycle event topic and payload generation."""
 
-    def test_build_lifecycle_topic(
-        self, temp_db: Path, basic_config: LifecycleConfig
-    ) -> None:
+    def test_build_lifecycle_topic(self, temp_db: Path, basic_config: LifecycleConfig) -> None:
         """Test building lifecycle topic from asset ID."""
         tracker = AssetLifecycleTracker(temp_db, basic_config)
 
@@ -294,9 +272,7 @@ class TestLifecycleEventTopics:
 
         assert topic == "UNS/Sys/Lifecycle/example.com_asset_001"
 
-    def test_build_event_payload(
-        self, temp_db: Path, basic_config: LifecycleConfig
-    ) -> None:
+    def test_build_event_payload(self, temp_db: Path, basic_config: LifecycleConfig) -> None:
         """Test building event payload."""
         tracker = AssetLifecycleTracker(temp_db, basic_config)
         asset_id = "https://example.com/asset/001"
@@ -333,9 +309,7 @@ class TestPersistence:
         assert status.state == AssetState.ONLINE
         assert "topic1" in status.topics
 
-    def test_remove_asset(
-        self, temp_db: Path, basic_config: LifecycleConfig
-    ) -> None:
+    def test_remove_asset(self, temp_db: Path, basic_config: LifecycleConfig) -> None:
         """Test removing an asset from tracking."""
         tracker = AssetLifecycleTracker(temp_db, basic_config)
         asset_id = "https://example.com/asset/001"
@@ -346,9 +320,7 @@ class TestPersistence:
         assert result is True
         assert tracker.get_asset_status(asset_id) is None
 
-    def test_remove_unknown_asset(
-        self, temp_db: Path, basic_config: LifecycleConfig
-    ) -> None:
+    def test_remove_unknown_asset(self, temp_db: Path, basic_config: LifecycleConfig) -> None:
         """Test removing an unknown asset."""
         tracker = AssetLifecycleTracker(temp_db, basic_config)
 
@@ -356,9 +328,7 @@ class TestPersistence:
 
         assert result is False
 
-    def test_clear_all(
-        self, temp_db: Path, basic_config: LifecycleConfig
-    ) -> None:
+    def test_clear_all(self, temp_db: Path, basic_config: LifecycleConfig) -> None:
         """Test clearing all tracked assets."""
         tracker = AssetLifecycleTracker(temp_db, basic_config)
 
@@ -373,9 +343,7 @@ class TestPersistence:
 class TestAssetStatusProperties:
     """Tests for AssetStatus properties."""
 
-    def test_age_seconds(
-        self, temp_db: Path, basic_config: LifecycleConfig
-    ) -> None:
+    def test_age_seconds(self, temp_db: Path, basic_config: LifecycleConfig) -> None:
         """Test age_seconds property."""
         tracker = AssetLifecycleTracker(temp_db, basic_config)
         asset_id = "https://example.com/asset/001"

@@ -116,9 +116,7 @@ class SemanticValidator:
                 try:
                     self._compiled_patterns[semantic_id] = re.compile(constraint.pattern)
                 except re.error as e:
-                    logger.warning(
-                        "Invalid regex pattern for %s: %s", semantic_id, e
-                    )
+                    logger.warning("Invalid regex pattern for %s: %s", semantic_id, e)
 
     def validate(self, metric: ContextMetric) -> ValidationResult:
         """Validate a single metric.

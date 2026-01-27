@@ -297,9 +297,7 @@ class MqttClient:
             for key, value in user_properties.items():
                 properties.UserProperty = (key, value)
 
-        result = self._client.publish(
-            topic, payload, qos=qos, retain=retain, properties=properties
-        )
+        result = self._client.publish(topic, payload, qos=qos, retain=retain, properties=properties)
 
         if result.rc != MQTTErrorCode.MQTT_ERR_SUCCESS:
             raise MqttClientError(f"Publish failed: {result.rc}")

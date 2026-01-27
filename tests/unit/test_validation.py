@@ -74,9 +74,7 @@ class TestSemanticIdValidation:
         assert not result.is_valid
         assert result.errors[0].error_type == ErrorType.MISSING_SEMANTIC_ID
 
-    def test_missing_semantic_id_not_required_type(
-        self, basic_config: ValidationConfig
-    ) -> None:
+    def test_missing_semantic_id_not_required_type(self, basic_config: ValidationConfig) -> None:
         """Test that missing semantic ID on non-required type is OK."""
         validator = SemanticValidator(basic_config)
         metric = ContextMetric(
@@ -293,9 +291,7 @@ class TestBatchValidation:
         assert len(valid) == 2
         assert all(m.semantic_id is not None for m in valid)
 
-    def test_all_errors_flattened(
-        self, config_with_constraints: ValidationConfig
-    ) -> None:
+    def test_all_errors_flattened(self, config_with_constraints: ValidationConfig) -> None:
         """Test that all errors are properly flattened."""
         validator = SemanticValidator(config_with_constraints)
         metrics = [
@@ -342,9 +338,7 @@ class TestValidationErrorDetails:
 
         assert result.errors[0].path == "Deep.Nested.Path.Element"
 
-    def test_error_includes_semantic_id(
-        self, config_with_constraints: ValidationConfig
-    ) -> None:
+    def test_error_includes_semantic_id(self, config_with_constraints: ValidationConfig) -> None:
         """Test that constraint errors include semantic ID."""
         validator = SemanticValidator(config_with_constraints)
         metric = ContextMetric(
@@ -358,7 +352,5 @@ class TestValidationErrorDetails:
 
         result = validator.validate(metric)
 
-        range_error = next(
-            e for e in result.errors if e.error_type == ErrorType.VALUE_OUT_OF_RANGE
-        )
+        range_error = next(e for e in result.errors if e.error_type == ErrorType.VALUE_OUT_OF_RANGE)
         assert range_error.semantic_id == "0173-1#02-AAO677#002"

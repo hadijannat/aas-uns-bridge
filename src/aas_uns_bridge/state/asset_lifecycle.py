@@ -125,8 +125,7 @@ class AssetLifecycleTracker:
         """Load persisted asset states from database."""
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.execute(
-                "SELECT asset_id, state, last_seen_ms, first_seen_ms, topics "
-                "FROM asset_lifecycle"
+                "SELECT asset_id, state, last_seen_ms, first_seen_ms, topics FROM asset_lifecycle"
             )
 
             for row in cursor:
@@ -295,7 +294,7 @@ class AssetLifecycleTracker:
                         previous_state=AssetState.ONLINE,
                         new_state=AssetState.STALE,
                         timestamp_ms=now_ms,
-                        reason=f"no_data_for_{int(age_ms/1000)}s",
+                        reason=f"no_data_for_{int(age_ms / 1000)}s",
                     )
                     events.append(event)
 

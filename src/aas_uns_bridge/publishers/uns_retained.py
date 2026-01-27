@@ -132,13 +132,9 @@ class UnsRetainedPublisher:
 
         # Determine whether to use User Properties and payload metadata
         use_props = self.semantic_config.use_user_properties
-        include_payload_metadata = (
-            not use_props or self.semantic_config.payload_metadata_fallback
-        )
+        include_payload_metadata = not use_props or self.semantic_config.payload_metadata_fallback
 
-        payload = self._build_payload(
-            metric, aas_uri, include_metadata=include_payload_metadata
-        )
+        payload = self._build_payload(metric, aas_uri, include_metadata=include_payload_metadata)
         payload_bytes = json.dumps(payload, ensure_ascii=False).encode("utf-8")
 
         # Build User Properties if configured

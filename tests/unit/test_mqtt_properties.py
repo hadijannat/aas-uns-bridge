@@ -99,9 +99,7 @@ class TestUnsRetainedPublisherUserProperties:
         assert "unit" not in payload
         assert "valueType" not in payload
 
-    def test_publish_with_user_properties_enabled(
-        self, sample_metric: ContextMetric
-    ) -> None:
+    def test_publish_with_user_properties_enabled(self, sample_metric: ContextMetric) -> None:
         """Test publishing with User Properties enabled."""
         mqtt_client = MagicMock(spec=MqttClient)
         semantic_config = SemanticConfig(
@@ -118,9 +116,7 @@ class TestUnsRetainedPublisherUserProperties:
         assert call_kwargs["user_properties"] is not None
         assert USER_PROP_SEMANTIC_ID in call_kwargs["user_properties"]
 
-    def test_publish_with_user_properties_and_fallback(
-        self, sample_metric: ContextMetric
-    ) -> None:
+    def test_publish_with_user_properties_and_fallback(self, sample_metric: ContextMetric) -> None:
         """Test publishing with User Properties and payload fallback."""
         mqtt_client = MagicMock(spec=MqttClient)
         semantic_config = SemanticConfig(
@@ -138,12 +134,11 @@ class TestUnsRetainedPublisherUserProperties:
 
         # Payload should contain metadata (since fallback=True)
         import json
+
         payload = json.loads(call_kwargs["payload"])
         assert "semanticId" in payload
 
-    def test_publish_without_user_properties(
-        self, sample_metric: ContextMetric
-    ) -> None:
+    def test_publish_without_user_properties(self, sample_metric: ContextMetric) -> None:
         """Test publishing without User Properties (default)."""
         mqtt_client = MagicMock(spec=MqttClient)
         publisher = UnsRetainedPublisher(mqtt_client, UnsConfig())
