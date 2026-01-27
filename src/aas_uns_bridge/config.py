@@ -1,10 +1,10 @@
 """Configuration models for the AAS-UNS Bridge."""
 
 from pathlib import Path
-from typing import Literal
+from typing import Literal, Self
 
 import yaml
-from pydantic import BaseModel, Field, SecretStr
+from pydantic import BaseModel, Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -33,7 +33,9 @@ class ValidationConfig(BaseModel):
     enforce_semantic_ids: bool = True
     """Require semantic IDs on elements."""
 
-    required_for_types: list[str] = Field(default_factory=lambda: ["Property", "Range"])
+    required_for_types: list[str] = Field(
+        default_factory=lambda: ["Property", "Range", "Range.min", "Range.max"]
+    )
     """AAS element types that require semantic IDs."""
 
     reject_invalid: bool = False
@@ -85,6 +87,10 @@ class SemanticConfig(BaseModel):
     - Level 0: Raw pass-through (no validation/enrichment)
     - Level 1: Validated (schema validation before publish)
     - Level 2: Enriched (validated + MQTT v5 User Properties)
+
+    Note: Setting sqos_level automatically enables the appropriate features:
+    - Level 1+ enables validation
+    - Level 2 enables use_user_properties
     """
 
     sqos_level: Literal[0, 1, 2] = 0
@@ -104,6 +110,27 @@ class SemanticConfig(BaseModel):
 
     lifecycle: LifecycleConfig = Field(default_factory=LifecycleConfig)
     """Lifecycle tracking settings."""
+
+    @model_validator(mode="after")
+    def enforce_sqos_level(self) -> Self:
+        """Enforce sQoS level settings.
+
+        - Level 1+: Enable validation
+        - Level 2: Enable User Properties
+        """
+        if self.sqos_level >= 1:
+            # Enable validation at level 1+
+            self.validation = ValidationConfig(
+                enabled=True,
+                enforce_semantic_ids=self.validation.enforce_semantic_ids,
+                required_for_types=self.validation.required_for_types,
+                reject_invalid=self.validation.reject_invalid,
+                value_constraints=self.validation.value_constraints,
+            )
+        if self.sqos_level >= 2:
+            # Enable User Properties at level 2
+            self.use_user_properties = True
+        return self
 
 
 class MqttConfig(BaseModel):

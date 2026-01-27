@@ -232,12 +232,82 @@ class BridgeDaemon:
             self.sparkplug_publisher.publish_nbirth()
             self.sparkplug_publisher.republish_dbirths()
 
+        # Subscribe to Sparkplug DDEATH for lifecycle tracking
+        if self.lifecycle_tracker and self.config.sparkplug.enabled:
+            ddeath_topic = f"spBv1.0/{self.config.sparkplug.group_id}/DDEATH/+/+"
+            self.mqtt_client.subscribe(ddeath_topic, self._handle_ddeath)
+            logger.info("Subscribed to DDEATH topic: %s", ddeath_topic)
+
     def _on_mqtt_disconnect(self) -> None:
         """Handle MQTT disconnection."""
         logger.warning("MQTT disconnected")
         METRICS.mqtt_connected.set(0)
         if self.config.sparkplug.enabled:
             self.sparkplug_publisher.mark_offline()
+
+    def _handle_ddeath(self, topic: str, payload: bytes) -> None:
+        """Handle Sparkplug DDEATH message for lifecycle tracking.
+
+        Args:
+            topic: The DDEATH topic (spBv1.0/{group}/DDEATH/{edge_node}/{device}).
+            payload: The DDEATH payload (typically empty or contains death certificate).
+        """
+        if not self.lifecycle_tracker:
+            return
+
+        # Parse device_id from topic: spBv1.0/{group}/DDEATH/{edge_node}/{device}
+        parts = topic.split("/")
+        if len(parts) >= 5:
+            device_id = parts[4]  # The device ID
+            logger.info("Received DDEATH for device: %s", device_id)
+
+            # Mark the asset as offline
+            event = self.lifecycle_tracker.mark_offline(device_id, reason="ddeath")
+            if event:
+                METRICS.asset_lifecycle_events_total.labels(state=event.new_state.value).inc()
+
+                # Publish lifecycle event if configured
+                if self.config.semantic.lifecycle.publish_lifecycle_events:
+                    lc_topic = self.lifecycle_tracker.build_lifecycle_topic(device_id)
+                    lc_payload = self.lifecycle_tracker.build_event_payload(event)
+                    try:
+                        self.mqtt_client.publish(lc_topic, lc_payload, qos=1, retain=False)
+                    except Exception as e:
+                        logger.error("Failed to publish offline event: %s", e)
+
+                # Clear retained messages if configured
+                if self.config.semantic.lifecycle.clear_retained_on_offline:
+                    self._clear_retained_for_asset(device_id)
+
+            # Update gauges
+            METRICS.assets_online.set(self.lifecycle_tracker.online_count)
+            METRICS.assets_stale.set(self.lifecycle_tracker.stale_count)
+            METRICS.assets_offline.set(self.lifecycle_tracker.offline_count)
+
+    def _clear_retained_for_asset(self, asset_id: str) -> None:
+        """Clear retained messages for an offline asset.
+
+        Publishes empty payloads with retain=True to clear all known topics
+        for this asset.
+
+        Args:
+            asset_id: The asset identifier.
+        """
+        if not self.lifecycle_tracker:
+            return
+
+        topics = self.lifecycle_tracker.get_topics_for_asset(asset_id)
+        if not topics:
+            logger.debug("No topics to clear for asset %s", asset_id)
+            return
+
+        logger.info("Clearing %d retained messages for offline asset %s", len(topics), asset_id)
+        for topic in topics:
+            try:
+                # Publish empty payload with retain to clear the retained message
+                self.mqtt_client.publish(topic, b"", qos=1, retain=True)
+            except Exception as e:
+                logger.error("Failed to clear retained message on %s: %s", topic, e)
 
     def _compute_file_hash(self, path: Path) -> str:
         """Compute SHA256 hash of a file."""
@@ -311,6 +381,11 @@ class BridgeDaemon:
                 len(metrics),
             )
 
+            # Schema drift detection runs on RAW metrics (before validation filtering)
+            # to avoid false "removal" events when reject_invalid filters out metrics
+            if self.drift_detector and global_asset_id:
+                self._check_and_handle_drift(global_asset_id, metrics)
+
             # Semantic validation (sQoS level 1+)
             if self.validator:
                 result = self.validator.validate_batch(metrics)
@@ -328,10 +403,6 @@ class BridgeDaemon:
                     metrics = result.valid_metrics
                     if not metrics:
                         continue
-
-            # Schema drift detection
-            if self.drift_detector and global_asset_id:
-                self._check_and_handle_drift(global_asset_id, metrics)
 
             # Build topics for UNS
             topic_metrics = self.mapper.build_topics_for_submodel(

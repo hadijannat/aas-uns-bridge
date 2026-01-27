@@ -186,3 +186,54 @@ class TestMqttClientUserProperties:
             mock_instance.publish.assert_called_once()
             call_args = mock_instance.publish.call_args
             assert call_args.kwargs.get("properties") is not None
+
+    def test_publish_preserves_all_user_properties(self) -> None:
+        """Test that ALL User Properties are preserved, not just the last one."""
+        with patch("aas_uns_bridge.mqtt.client.mqtt.Client") as mock_client_cls:
+            from aas_uns_bridge.config import MqttConfig
+
+            mock_instance = mock_client_cls.return_value
+            mock_instance.is_connected.return_value = True
+
+            # Simulate successful publish
+            mock_result = MagicMock()
+            mock_result.rc = 0  # MQTT_ERR_SUCCESS
+            mock_instance.publish.return_value = mock_result
+
+            client = MqttClient(MqttConfig())
+            client._connected.set()
+
+            # Pass multiple User Properties
+            user_props = {
+                "aas:semanticId": "0173-1#02-AAO677#002",
+                "aas:unit": "degC",
+                "aas:valueType": "xs:double",
+                "aas:aasType": "Property",
+                "aas:source": "file://test.aasx",
+            }
+
+            client.publish(
+                "test/topic",
+                b"payload",
+                user_properties=user_props,
+            )
+
+            # Verify ALL properties are preserved
+            call_args = mock_instance.publish.call_args
+            props = call_args.kwargs.get("properties")
+            assert props is not None
+
+            # UserProperty should be a list of (key, value) tuples
+            user_property_list = props.UserProperty
+            assert user_property_list is not None
+            assert len(user_property_list) == 5, (
+                f"Expected 5 properties, got {len(user_property_list)}"
+            )
+
+            # Convert to dict for easier assertion
+            props_dict = dict(user_property_list)
+            assert props_dict["aas:semanticId"] == "0173-1#02-AAO677#002"
+            assert props_dict["aas:unit"] == "degC"
+            assert props_dict["aas:valueType"] == "xs:double"
+            assert props_dict["aas:aasType"] == "Property"
+            assert props_dict["aas:source"] == "file://test.aasx"

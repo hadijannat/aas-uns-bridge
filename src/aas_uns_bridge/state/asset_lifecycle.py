@@ -10,6 +10,7 @@ from enum import Enum
 from pathlib import Path
 
 from aas_uns_bridge.config import LifecycleConfig
+from aas_uns_bridge.mapping.sanitize import sanitize_segment
 
 logger = logging.getLogger(__name__)
 
@@ -403,9 +404,10 @@ class AssetLifecycleTracker:
         Returns:
             MQTT topic for lifecycle events.
         """
-        # Sanitize asset_id for use in topic
+        # Strip protocol prefix and sanitize for MQTT topic safety
         sanitized = asset_id.replace("https://", "").replace("http://", "")
-        sanitized = sanitized.replace("/", "_").replace(" ", "_")
+        # Use sanitize_segment to handle all MQTT-invalid characters (#, +, /, etc.)
+        sanitized = sanitize_segment(sanitized, max_length=128)
         return f"UNS/Sys/Lifecycle/{sanitized}"
 
     def build_event_payload(self, event: LifecycleEvent) -> bytes:

@@ -294,8 +294,8 @@ class MqttClient:
         properties = None
         if user_properties:
             properties = Properties(PacketTypes.PUBLISH)  # type: ignore[no-untyped-call]
-            for key, value in user_properties.items():
-                properties.UserProperty = (key, value)
+            # Paho expects UserProperty as a list of (key, value) tuples
+            properties.UserProperty = list(user_properties.items())
 
         result = self._client.publish(topic, payload, qos=qos, retain=retain, properties=properties)
 

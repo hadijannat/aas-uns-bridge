@@ -13,6 +13,7 @@ from typing import Any
 
 from aas_uns_bridge.config import DriftConfig
 from aas_uns_bridge.domain.models import ContextMetric
+from aas_uns_bridge.mapping.sanitize import sanitize_segment
 
 logger = logging.getLogger(__name__)
 
@@ -416,9 +417,10 @@ class DriftDetector:
         Returns:
             MQTT topic for drift alerts.
         """
-        # Sanitize asset_id for use in topic
+        # Strip protocol prefix and sanitize for MQTT topic safety
         sanitized = asset_id.replace("https://", "").replace("http://", "")
-        sanitized = sanitized.replace("/", "_").replace(" ", "_")
+        # Use sanitize_segment to handle all MQTT-invalid characters (#, +, /, etc.)
+        sanitized = sanitize_segment(sanitized, max_length=128)
         return self.config.alert_topic_template.format(asset_id=sanitized)
 
     def build_alert_payload(self, event: DriftEvent) -> bytes:
