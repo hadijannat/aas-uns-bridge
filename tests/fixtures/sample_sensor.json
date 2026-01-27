@@ -1,6 +1,7 @@
 {
   "assetAdministrationShells": [
     {
+      "modelType": "AssetAdministrationShell",
       "idShort": "TemperatureSensorAAS",
       "id": "https://example.com/aas/test-sensor-001-aas",
       "assetInformation": {
@@ -22,6 +23,7 @@
   ],
   "submodels": [
     {
+      "modelType": "Submodel",
       "idShort": "SensorData",
       "id": "https://example.com/submodel/sensor-technical-001",
       "semanticId": {

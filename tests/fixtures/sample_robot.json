@@ -1,6 +1,7 @@
 {
   "assetAdministrationShells": [
     {
+      "modelType": "AssetAdministrationShell",
       "idShort": "RobotAAS",
       "id": "https://example.com/aas/test-robot-001-aas",
       "assetInformation": {
@@ -31,6 +32,7 @@
   ],
   "submodels": [
     {
+      "modelType": "Submodel",
       "idShort": "TechnicalData",
       "id": "https://example.com/submodel/technical-data-001",
       "semanticId": {
@@ -246,6 +248,7 @@
       ]
     },
     {
+      "modelType": "Submodel",
       "idShort": "OperationalData",
       "id": "https://example.com/submodel/operational-data-001",
       "semanticId": {

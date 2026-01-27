@@ -1,6 +1,7 @@
 {
   "assetAdministrationShells": [
     {
+      "modelType": "AssetAdministrationShell",
       "idShort": "EmptyCollectionAAS",
       "id": "https://example.com/aas/empty-collection-001",
       "assetInformation": {
@@ -22,6 +23,7 @@
   ],
   "submodels": [
     {
+      "modelType": "Submodel",
       "idShort": "DataWithEmptyCollection",
       "id": "https://example.com/submodel/empty-collection",
       "submodelElements": [
@@ -34,6 +36,7 @@
           "idShort": "EmptyList",
           "modelType": "SubmodelElementList",
           "typeValueListElement": "Property",
+          "valueTypeListElement": "xs:string",
           "value": []
         },
         {

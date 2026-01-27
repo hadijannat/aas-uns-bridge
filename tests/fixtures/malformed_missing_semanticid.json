@@ -1,6 +1,7 @@
 {
   "assetAdministrationShells": [
     {
+      "modelType": "AssetAdministrationShell",
       "idShort": "MalformedAAS",
       "id": "https://example.com/aas/malformed-001",
       "assetInformation": {
@@ -22,6 +23,7 @@
   ],
   "submodels": [
     {
+      "modelType": "Submodel",
       "idShort": "NoSemanticData",
       "id": "https://example.com/submodel/no-semantic-id",
       "submodelElements": [

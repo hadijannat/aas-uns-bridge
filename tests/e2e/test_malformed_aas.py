@@ -259,6 +259,7 @@ class TestGracefulDegradation:
         valid_aas = {
             "assetAdministrationShells": [
                 {
+                    "modelType": "AssetAdministrationShell",
                     "idShort": "PartialAAS",
                     "id": "https://example.com/aas/partial",
                     "assetInformation": {
@@ -280,6 +281,7 @@ class TestGracefulDegradation:
             ],
             "submodels": [
                 {
+                    "modelType": "Submodel",
                     "idShort": "PartialData",
                     "id": "https://example.com/submodel/partial",
                     "submodelElements": [

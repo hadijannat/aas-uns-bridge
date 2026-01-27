@@ -69,6 +69,7 @@ def generate_large_aas(num_properties: int = 5000) -> dict:
     return {
         "assetAdministrationShells": [
             {
+                "modelType": "AssetAdministrationShell",
                 "idShort": "LoadTestAAS",
                 "id": "https://example.com/aas/load-test-aas",
                 "assetInformation": {
@@ -90,6 +91,7 @@ def generate_large_aas(num_properties: int = 5000) -> dict:
         ],
         "submodels": [
             {
+                "modelType": "Submodel",
                 "idShort": "LoadTestData",
                 "id": "https://example.com/submodel/load-test",
                 "submodelElements": collections,

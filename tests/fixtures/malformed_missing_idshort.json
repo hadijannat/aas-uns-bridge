@@ -1,6 +1,7 @@
 {
   "assetAdministrationShells": [
     {
+      "modelType": "AssetAdministrationShell",
       "idShort": "MissingIdShortAAS",
       "id": "https://example.com/aas/missing-idshort-001",
       "assetInformation": {
@@ -22,6 +23,7 @@
   ],
   "submodels": [
     {
+      "modelType": "Submodel",
       "idShort": "MixedProperties",
       "id": "https://example.com/submodel/missing-idshort",
       "submodelElements": [
