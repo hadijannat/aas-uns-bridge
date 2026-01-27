@@ -150,6 +150,7 @@ class SparkplugPublisher:
                 semantic_keys = m.get("semantic_keys")
                 if semantic_keys and len(semantic_keys) > 1:
                     import json
+
                     properties[SEMANTIC_PROPS["semanticKeys"]] = json.dumps(list(semantic_keys))
 
                 builder.add_metric_from_xsd(
