@@ -1,8 +1,10 @@
 # AAS-UNS Bridge
 
-A daemonized integration service that ingests Asset Administration Shell (AAS) content and publishes it to both UNS retained topics and Sparkplug B for dual-plane discovery.
+A daemonized integration service that ingests Asset Administration Shell (AAS) content and publishes it to both UNS retained topics and Sparkplug B for dual-plane discovery. Features a semantic hypervisor layer for validation, enrichment, and closed-loop control.
 
 ## Features
+
+### Core Features
 
 - **Dual Publication**: Publishes to both UNS retained topics and Sparkplug B simultaneously
 - **Multiple AAS Sources**: AASX file watcher and AAS Repository REST API polling
@@ -11,43 +13,71 @@ A daemonized integration service that ingests Asset Administration Shell (AAS) c
 - **Sparkplug Compliance**: Full NBIRTH/DBIRTH/NDEATH/DDEATH lifecycle support
 - **Observability**: Prometheus metrics, structured logging, health endpoints
 
+### Semantic Hypervisor
+
+The semantic hypervisor transforms the bridge from a passive translator into an active semantic enforcement layer:
+
+| Feature | Description |
+|---------|-------------|
+| **Semantic QoS Levels** | Three levels: sQoS 0 (raw pass-through), sQoS 1 (validated), sQoS 2 (enriched with MQTT v5 headers) |
+| **Pre-publish Validation** | Enforce semantic IDs, value constraints (min/max/unit/pattern) |
+| **Bidirectional Sync** | Command write-back to AAS repository with allowed/denied path patterns |
+| **Pointer Mode** | ~90% payload reduction using hash references to semantic context |
+| **Resolution Cache** | Sub-millisecond semantic context resolution with LRU caching |
+| **Schema Drift Detection** | Detect metric additions, removals, and type changes |
+| **Streaming Drift** | Half-Space Trees for real-time anomaly detection |
+| **Asset Lifecycle** | Track online/stale/offline states with lifecycle events |
+| **Fidelity Metrics** | Measure semantic information preservation across the translation |
+
 ## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                        AAS-UNS Bridge                               │
-├─────────────────────────────────────────────────────────────────────┤
-│                                                                     │
-│  ┌──────────────┐    ┌────────────────┐    ┌───────────────────┐   │
-│  │ File Watcher │───▶│   AAS Loader   │───▶│    Traversal      │   │
-│  │  (watchdog)  │    │ (BaSyx SDK)    │    │  (flatten SMEs)   │   │
-│  └──────────────┘    └────────────────┘    └─────────┬─────────┘   │
-│                                                      │             │
-│  ┌──────────────┐                                    │             │
-│  │  REST Poller │───────────────────────────────────▶│             │
-│  │  (httpx)     │                                    │             │
-│  └──────────────┘                                    ▼             │
-│                                            ┌─────────────────┐     │
-│                                            │  ISA-95 Mapper  │     │
-│                                            │ (topic builder) │     │
-│                                            └────────┬────────┘     │
-│                                                     │              │
-│                          ┌──────────────────────────┼──────────────┤
-│                          │                          │              │
-│                          ▼                          ▼              │
-│               ┌────────────────────┐    ┌────────────────────┐     │
-│               │  UNS Publisher     │    │ Sparkplug Publisher│     │
-│               │  (retained JSON)   │    │ (protobuf births)  │     │
-│               └─────────┬──────────┘    └─────────┬──────────┘     │
-│                         │                         │                │
-│                         └────────────┬────────────┘                │
-│                                      │                             │
-│                                      ▼                             │
-│                              ┌──────────────┐                      │
-│                              │ MQTT Client  │                      │
-│                              │ (paho v2)    │                      │
-│                              └──────┬───────┘                      │
-└─────────────────────────────────────┼───────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                            AAS-UNS Bridge                                   │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  ┌──────────────┐    ┌────────────────┐    ┌───────────────────┐           │
+│  │ File Watcher │───▶│   AAS Loader   │───▶│    Traversal      │           │
+│  │  (watchdog)  │    │ (BaSyx SDK)    │    │  (flatten SMEs)   │           │
+│  └──────────────┘    └────────────────┘    └─────────┬─────────┘           │
+│                                                      │                     │
+│  ┌──────────────┐                                    │                     │
+│  │  REST Poller │───────────────────────────────────▶│                     │
+│  │  (httpx)     │                                    │                     │
+│  └──────────────┘                                    ▼                     │
+│                                            ┌─────────────────┐             │
+│                                            │  ISA-95 Mapper  │             │
+│                                            │ (topic builder) │             │
+│                                            └────────┬────────┘             │
+│                                                     │                      │
+│  ┌──────────────────────────────────────────────────┼────────────────────┐ │
+│  │                    Semantic Hypervisor           │                    │ │
+│  │  ┌────────────┐  ┌─────────────┐  ┌────────────┐ │  ┌──────────────┐  │ │
+│  │  │ Validation │  │   Pointer   │  │   Drift    │ │  │  Lifecycle   │  │ │
+│  │  │ (sQoS 1+)  │  │   Mode      │  │ Detection  │─┼─▶│  Tracking    │  │ │
+│  │  └────────────┘  └─────────────┘  └────────────┘ │  └──────────────┘  │ │
+│  │  ┌────────────┐  ┌─────────────┐  ┌────────────┐ │                    │ │
+│  │  │  Fidelity  │  │ Resolution  │  │Bidirectional│◀─── MQTT Commands   │ │
+│  │  │  Metrics   │  │   Cache     │  │   Sync     │ │                    │ │
+│  │  └────────────┘  └─────────────┘  └────────────┘ │                    │ │
+│  └──────────────────────────────────────────────────┼────────────────────┘ │
+│                                                     │                      │
+│                          ┌──────────────────────────┼─────────────────┐    │
+│                          │                          │                 │    │
+│                          ▼                          ▼                 │    │
+│               ┌────────────────────┐    ┌────────────────────┐        │    │
+│               │  UNS Publisher     │    │ Sparkplug Publisher│        │    │
+│               │  (retained JSON)   │    │ (protobuf births)  │        │    │
+│               └─────────┬──────────┘    └─────────┬──────────┘        │    │
+│                         │                         │                   │    │
+│                         └────────────┬────────────┘                   │    │
+│                                      │                                │    │
+│                                      ▼                                │    │
+│                              ┌──────────────┐                         │    │
+│                              │ MQTT Client  │◀────────────────────────┘    │
+│                              │ (paho v2)    │                              │
+│                              └──────┬───────┘                              │
+└─────────────────────────────────────┼──────────────────────────────────────┘
                                       │
                                       ▼
                               ┌──────────────┐
@@ -98,7 +128,7 @@ aas-uns-bridge run --config config/config.yaml --mappings config/mappings.yaml
 
 ## Configuration
 
-### config.yaml
+### Basic Configuration
 
 ```yaml
 mqtt:
@@ -107,6 +137,10 @@ mqtt:
   client_id: aas-uns-bridge
   # username: bridge_user
   # password: secret
+  use_tls: false
+  keepalive: 60
+  reconnect_delay_min: 1.0
+  reconnect_delay_max: 120.0
 
 uns:
   enabled: true
@@ -118,6 +152,8 @@ sparkplug:
   enabled: true
   group_id: AAS
   edge_node_id: Bridge
+  device_prefix: ""
+  qos: 0
 
 file_watcher:
   enabled: true
@@ -125,6 +161,19 @@ file_watcher:
   patterns:
     - "*.aasx"
     - "*.json"
+  recursive: true
+  debounce_seconds: 2.0
+
+repo_client:
+  enabled: false
+  base_url: http://localhost:8080
+  poll_interval_seconds: 60.0
+  timeout_seconds: 30.0
+
+state:
+  db_path: ./state/bridge.db
+  cache_births: true
+  deduplicate_publishes: true
 
 observability:
   log_level: INFO
@@ -133,33 +182,143 @@ observability:
   health_port: 8080
 ```
 
-### mappings.yaml
+### Semantic Enforcement Configuration
+
+Control validation and semantic QoS levels:
+
+```yaml
+semantic:
+  # Semantic QoS level:
+  #   0 = Raw pass-through (no validation/enrichment)
+  #   1 = Validated (schema validation before publish)
+  #   2 = Enriched (validated + MQTT v5 User Properties)
+  sqos_level: 0
+
+  # Include metadata in MQTT v5 User Properties (headers)
+  use_user_properties: false
+
+  # Keep metadata in JSON payload for non-v5 subscribers
+  payload_metadata_fallback: true
+
+  # Pre-publish validation
+  validation:
+    enabled: false
+    enforce_semantic_ids: true
+    required_for_types:
+      - Property
+      - Range
+    reject_invalid: false
+    # Value constraints by semantic ID
+    value_constraints:
+      "0173-1#02-AAO677#002":  # Temperature
+        min: -40
+        max: 120
+        unit: "degC"
+      "0173-1#02-AAH880#002":  # Serial number
+        pattern: "^[A-Z]{2}[0-9]{6}$"
+
+  # Schema drift detection
+  drift:
+    enabled: false
+    track_additions: true
+    track_removals: true
+    track_type_changes: true
+    alert_topic_template: "UNS/Sys/DriftAlerts/{asset_id}"
+
+  # Asset lifecycle tracking
+  lifecycle:
+    enabled: false
+    stale_threshold_seconds: 300
+    clear_retained_on_offline: false
+    publish_lifecycle_events: true
+```
+
+### Hypervisor Configuration
+
+Advanced features for semantic context management:
+
+```yaml
+hypervisor:
+  # Semantic resolution cache
+  resolution_cache:
+    enabled: false
+    max_memory_entries: 10000
+    preload_on_startup: true
+
+  # Pointer mode: ~90% payload reduction
+  pointer:
+    enabled: false
+    mode: inline  # "inline", "pointer", or "hybrid"
+    publish_context_topics: true
+    context_topic_prefix: "UNS/Sys/Context"
+
+  # Information-theoretic fidelity metrics
+  fidelity:
+    enabled: false
+    alert_threshold: 0.7
+    weights:
+      structural: 0.3
+      semantic: 0.5
+      entropy: 0.2
+
+  # Streaming drift detection with Half-Space Trees
+  incremental_drift:
+    enabled: false
+    window_size: 1000
+    num_trees: 25
+    severity_thresholds:
+      low: 0.3
+      medium: 0.5
+      high: 0.7
+      critical: 0.9
+
+  # Bidirectional sync: command write-back
+  bidirectional:
+    enabled: false
+    aas_repository_url: http://localhost:8080
+    command_topic_suffix: /cmd
+    allowed_write_patterns:
+      - "Setpoints/*"
+      - "Configuration/*"
+    denied_write_patterns:
+      - "readonly/*"
+      - "Identification/*"
+    validate_before_write: true
+    publish_confirmations: true
+```
+
+### Mappings Configuration
 
 Maps AAS globalAssetId to ISA-95 hierarchy:
 
 ```yaml
 default:
-  enterprise: DefaultCorp
+  enterprise: DefaultEnterprise
   site: DefaultSite
+  area: DefaultArea
+  line: DefaultLine
 
 assets:
-  "https://example.com/aas/robot-001":
+  "https://example.com/aas/robot-arm-001":
     enterprise: AcmeCorp
     site: PlantA
-    area: Assembly
+    area: Packaging
     line: Line1
-    asset: Robot001
+    asset: RobotArm001
 
 patterns:
-  - pattern: "https://example.com/aas/sensor-*"
+  - pattern: "https://example.com/aas/robot-*"
     enterprise: AcmeCorp
     site: PlantA
-    area: Sensors
+    area: Robotics
+    line: Assembly
 ```
 
 ## Topic Structure
 
 ### UNS Retained Topics
+
+Data topics for asset context:
 
 ```
 {enterprise}/{site}/{area}/{line}/{asset}/context/{submodel}/{element_path}
@@ -170,7 +329,7 @@ Example:
 AcmeCorp/PlantA/Assembly/Line1/Robot001/context/TechnicalData/GeneralInfo/ManufacturerName
 ```
 
-Payload:
+Payload (sQoS 0 - inline mode):
 ```json
 {
   "value": "Acme Robotics",
@@ -182,6 +341,15 @@ Payload:
 }
 ```
 
+Payload (pointer mode):
+```json
+{
+  "value": "Acme Robotics",
+  "timestamp": 1706369400000,
+  "ctx": "a1b2c3d4"
+}
+```
+
 ### Sparkplug B Topics
 
 ```
@@ -189,6 +357,81 @@ spBv1.0/{group_id}/NBIRTH/{edge_node_id}
 spBv1.0/{group_id}/DBIRTH/{edge_node_id}/{device_id}
 spBv1.0/{group_id}/DDATA/{edge_node_id}/{device_id}
 spBv1.0/{group_id}/NDEATH/{edge_node_id}
+```
+
+### Command Topics (Bidirectional Sync)
+
+Write commands back to AAS repository:
+
+```
+{enterprise}/{site}/{area}/{line}/{asset}/context/{submodel}/{property}/cmd
+```
+
+Payload:
+```json
+{
+  "value": 75.5,
+  "timestamp": 1706369400000,
+  "correlation_id": "cmd-123"
+}
+```
+
+Confirmation response (published to original topic):
+```json
+{
+  "ack": true,
+  "correlation_id": "cmd-123",
+  "timestamp": 1706369401000
+}
+```
+
+### System Topics
+
+**Context Topics** (Pointer mode semantic dictionaries):
+```
+UNS/Sys/Context/{dictionary}/{hash}
+```
+
+Payload:
+```json
+{
+  "semanticId": "0173-1#02-AAO677#002",
+  "unit": "degC",
+  "source": "aas-uns-bridge",
+  "aasUri": "/watch/robot-001.aasx"
+}
+```
+
+**Drift Alerts**:
+```
+UNS/Sys/DriftAlerts/{asset_id}
+```
+
+Payload:
+```json
+{
+  "type": "metric_added",
+  "asset_id": "robot-001",
+  "metric_path": "TechnicalData/NewProperty",
+  "timestamp": 1706369400000,
+  "severity": "medium"
+}
+```
+
+**Lifecycle Events**:
+```
+UNS/Sys/Lifecycle/{asset_id}
+```
+
+Payload:
+```json
+{
+  "state": "stale",
+  "previous_state": "online",
+  "asset_id": "robot-001",
+  "timestamp": 1706369400000,
+  "stale_duration_seconds": 305
+}
 ```
 
 ## CLI Commands
@@ -207,21 +450,63 @@ aas-uns-bridge status
 aas-uns-bridge version
 ```
 
-## Health Endpoints
+## Observability
 
-- `GET /health` - Full health status (JSON)
-- `GET /ready` - Kubernetes readiness probe
-- `GET /live` - Kubernetes liveness probe
+### Health Endpoints
 
-## Prometheus Metrics
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /health` | Full health status (JSON) |
+| `GET /ready` | Kubernetes readiness probe |
+| `GET /live` | Kubernetes liveness probe |
+
+### Prometheus Metrics
 
 Available at `http://localhost:9090/metrics`:
 
-- `aas_bridge_aas_loaded_total` - AAS files loaded
-- `aas_bridge_metrics_flattened_total` - Metrics extracted
-- `aas_bridge_uns_published_total` - UNS messages published
-- `aas_bridge_sparkplug_births_total` - Sparkplug births sent
-- `aas_bridge_mqtt_connected` - Connection status gauge
+**Core Metrics**:
+| Metric | Type | Description |
+|--------|------|-------------|
+| `aas_bridge_aas_loaded_total` | Counter | AAS files loaded |
+| `aas_bridge_metrics_flattened_total` | Counter | Metrics extracted |
+| `aas_bridge_uns_published_total` | Counter | UNS messages published |
+| `aas_bridge_sparkplug_births_total` | Counter | Sparkplug births sent |
+| `aas_bridge_mqtt_connected` | Gauge | Connection status |
+
+**Semantic Validation Metrics**:
+| Metric | Type | Description |
+|--------|------|-------------|
+| `semantic_validation_passed_total` | Counter | Metrics passing validation |
+| `semantic_validation_failed_total` | Counter | Metrics failing validation |
+| `semantic_validation_warnings_total` | Counter | Validation warnings issued |
+
+**Cache Metrics**:
+| Metric | Type | Description |
+|--------|------|-------------|
+| `semantic_cache_hits_total` | Counter | Cache hits |
+| `semantic_cache_misses_total` | Counter | Cache misses |
+| `semantic_cache_size` | Gauge | Current cache entries |
+
+**Drift Detection Metrics**:
+| Metric | Type | Description |
+|--------|------|-------------|
+| `streaming_drift_anomalies_total` | Counter | Anomalies detected (by severity) |
+| `streaming_drift_window_size` | Gauge | Current reference window size |
+
+**Lifecycle Metrics**:
+| Metric | Type | Description |
+|--------|------|-------------|
+| `asset_lifecycle_online` | Gauge | Assets currently online |
+| `asset_lifecycle_stale` | Gauge | Assets currently stale |
+| `asset_lifecycle_offline` | Gauge | Assets currently offline |
+| `asset_lifecycle_transitions_total` | Counter | State transitions (by type) |
+
+**Fidelity Metrics**:
+| Metric | Type | Description |
+|--------|------|-------------|
+| `fidelity_score_structural` | Gauge | Structural fidelity (0-1) |
+| `fidelity_score_semantic` | Gauge | Semantic fidelity (0-1) |
+| `fidelity_score_overall` | Gauge | Weighted overall fidelity |
 
 ## Development
 
@@ -234,14 +519,16 @@ source venv/bin/activate
 pip install -e ".[dev]"
 
 # Generate protobuf bindings
-protoc --python_out=src/aas_uns_bridge/proto proto/sparkplug_b.proto
+make proto
 
 # Run tests
-pytest
+make test
 
 # Run linting
-ruff check src tests
-mypy src
+make lint
+
+# Format code
+make format
 ```
 
 ## License
