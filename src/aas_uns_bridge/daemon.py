@@ -846,9 +846,10 @@ class BridgeDaemon:
         self.mqtt_client.connect()
 
         # Subscribe to command topics for bidirectional sync
-        if self.bidirectional_sync and self.config.uns.root_topic:
-            # Ensure proper wildcard format: "root/#" not "root#"
-            root = self.config.uns.root_topic.rstrip("/")
+        # Commands are at {root}/.../asset/cmd/{submodel}/{property}, not root/cmd/...
+        # Subscribe to full wildcard and filter for /cmd/ in message handler
+        if self.bidirectional_sync:
+            root = self.config.uns.root_topic.rstrip("/") if self.config.uns.root_topic else ""
             base_pattern = f"{root}/#" if root else "#"
             self.bidirectional_sync.subscribe_command_topics([base_pattern])
 

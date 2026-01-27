@@ -105,28 +105,37 @@ class BidirectionalSync:
     def subscribe_command_topics(self, base_patterns: list[str]) -> None:
         """Subscribe to command topics for write-back.
 
+        Commands are at ISA-95 hierarchy level:
+            {enterprise}/{site}/{area}/{line}/{asset}/cmd/{submodel}/{property}
+
+        We subscribe to the full wildcard and filter for /cmd/ in the handler
+        to match commands at any depth in the hierarchy.
+
         Args:
             base_patterns: Base topic patterns (e.g., ["Acme/Plant1/#"]).
         """
         for pattern in base_patterns:
-            # Normalize: remove trailing "#" and "/" to avoid double-slash
-            # "Acme/Plant1/#" -> "Acme/Plant1" -> "Acme/Plant1/cmd/#"
-            base = pattern.rstrip("#").rstrip("/")
-            if base:
-                cmd_pattern = f"{base}{self._cmd_suffix}/#"
-            else:
-                cmd_pattern = f"{self._cmd_suffix.lstrip('/')}/#"
-
-            self._mqtt.subscribe(cmd_pattern, self._handle_message)
-            logger.info("Subscribed to command topic: %s", cmd_pattern)
+            # Subscribe to full wildcard - filtering happens in _handle_message
+            # This allows matching /cmd/ at any level in the ISA-95 hierarchy
+            self._mqtt.subscribe(pattern, self._handle_message)
+            logger.info(
+                "Subscribed to topic pattern: %s (filtering for %s)", pattern, self._cmd_suffix
+            )
 
     def _handle_message(self, topic: str, payload: bytes) -> None:
         """Handle incoming MQTT message on command topic.
+
+        Filters for topics containing /cmd/ segment to identify command messages.
+        Commands follow pattern: {enterprise}/.../asset/cmd/{submodel}/{property}
 
         Args:
             topic: The MQTT topic.
             payload: The message payload.
         """
+        # Only process topics containing /cmd/ segment
+        if f"{self._cmd_suffix}/" not in topic:
+            return
+
         # Skip ack/nak response messages (our own responses to commands)
         if topic.endswith("/ack") or topic.endswith("/nak"):
             return
@@ -243,6 +252,38 @@ class BidirectionalSync:
         METRICS.bidirectional_validations_total.labels(result="allowed").inc()
         return ValidationResult(is_valid=True)
 
+    def _convert_mqtt_path_to_api(self, mqtt_path: str) -> str:
+        """Convert MQTT path to REST API path with proper array notation.
+
+        MQTT paths use slashes for all separators including array indices.
+        REST API paths use dots for object access and brackets for array indices.
+
+        Examples:
+            Limits/MaxTemp -> Limits.MaxTemp
+            List/0/Value -> List[0].Value
+            Settings/Items/2/Name -> Settings.Items[2].Name
+
+        Args:
+            mqtt_path: MQTT-style path with slash separators.
+
+        Returns:
+            REST API-style path with dot notation and bracket array indices.
+        """
+        parts = mqtt_path.split("/")
+        result: list[str] = []
+
+        for part in parts:
+            if part.isdigit():
+                # Array index - wrap in brackets, no dot before
+                result.append(f"[{part}]")
+            else:
+                # Object property - add dot separator if result is non-empty
+                if result:
+                    result.append(".")
+                result.append(part)
+
+        return "".join(result)
+
     def _execute_write(self, cmd: WriteCommand) -> None:
         """Execute a validated write command.
 
@@ -251,9 +292,8 @@ class BidirectionalSync:
         """
         from aas_uns_bridge.aas.repository_client import AasWriteError
 
-        # Convert MQTT path (slash-separated) to REST API path (dot-separated)
-        # MQTT: Limits/MaxTemp -> REST API: Limits.MaxTemp
-        api_property_path = cmd.property_path.replace("/", ".")
+        # Convert MQTT path to REST API path with proper array notation
+        api_property_path = self._convert_mqtt_path_to_api(cmd.property_path)
 
         try:
             self._aas.update_property(

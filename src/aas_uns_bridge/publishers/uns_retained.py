@@ -243,6 +243,9 @@ class UnsRetainedPublisher:
                 unit=metric.unit,
                 data_type=metric.value_type,
             )
+            # Publish context so consumers can resolve the pointer hash
+            if self._context_publisher:
+                self._context_publisher.publish_context(context)
             return context.to_pointer()
 
         # Check if already cached

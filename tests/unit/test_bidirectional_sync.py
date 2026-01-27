@@ -105,12 +105,17 @@ class TestBidirectionalSyncSubscription:
         sync_handler: BidirectionalSync,
         mock_mqtt_client: MagicMock,
     ) -> None:
-        """Test subscribing to command topics."""
+        """Test subscribing to command topics.
+
+        We now subscribe to the full wildcard pattern and filter for /cmd/
+        in the message handler to support commands at any ISA-95 hierarchy level.
+        """
         sync_handler.subscribe_command_topics(["Acme/Plant1/#"])
 
         mock_mqtt_client.subscribe.assert_called_once()
         call_args = mock_mqtt_client.subscribe.call_args
-        assert "/cmd/#" in call_args[0][0]
+        # Subscribe to full pattern - filtering happens in handler
+        assert call_args[0][0] == "Acme/Plant1/#"
 
     def test_subscribe_multiple_patterns(
         self,
@@ -121,6 +126,97 @@ class TestBidirectionalSyncSubscription:
         sync_handler.subscribe_command_topics(["Acme/#", "Contoso/#"])
 
         assert mock_mqtt_client.subscribe.call_count == 2
+
+
+class TestBidirectionalSyncFiltering:
+    """Tests for message filtering behavior."""
+
+    def test_handler_ignores_non_cmd_topics(
+        self,
+        sync_handler: BidirectionalSync,
+        mock_mqtt_client: MagicMock,
+        mock_aas_client: MagicMock,
+    ) -> None:
+        """Test that handler ignores topics without /cmd/ segment."""
+        # Regular data topic (not a command)
+        topic = "Acme/Plant1/Line1/Machine1/context/TechnicalData/Temperature"
+        payload = json.dumps({"value": 25.5}).encode()
+
+        sync_handler._handle_message(topic, payload)
+
+        # Should not call AAS client - not a command topic
+        mock_aas_client.update_property.assert_not_called()
+        mock_mqtt_client.publish.assert_not_called()
+
+    def test_handler_processes_cmd_at_asset_level(
+        self,
+        mock_mqtt_client: MagicMock,
+        mock_aas_client: MagicMock,
+    ) -> None:
+        """Test that handler processes commands at ISA-95 asset level."""
+        sync = BidirectionalSync(
+            mqtt_client=mock_mqtt_client,
+            aas_client=mock_aas_client,
+            allowed_patterns=["*/*"],
+        )
+
+        # Full ISA-95 hierarchy command at asset level
+        topic = "Enterprise/Site/Area/Line/Asset/cmd/Setpoints/Temperature"
+        payload = json.dumps({"value": 30.0}).encode()
+
+        sync._handle_message(topic, payload)
+
+        mock_aas_client.update_property.assert_called_once()
+
+    def test_handler_skips_ack_nak_messages(
+        self,
+        sync_handler: BidirectionalSync,
+        mock_aas_client: MagicMock,
+    ) -> None:
+        """Test that handler ignores ack/nak response messages."""
+        ack_topic = "Acme/Plant1/cmd/Setpoints/Temperature/ack"
+        nak_topic = "Acme/Plant1/cmd/Setpoints/Temperature/nak"
+        payload = json.dumps({"success": True}).encode()
+
+        sync_handler._handle_message(ack_topic, payload)
+        sync_handler._handle_message(nak_topic, payload)
+
+        # Should not process response messages
+        mock_aas_client.update_property.assert_not_called()
+
+
+class TestBidirectionalSyncPathConversion:
+    """Tests for MQTT to REST API path conversion."""
+
+    def test_simple_path_conversion(self, sync_handler: BidirectionalSync) -> None:
+        """Test converting simple slash-separated path."""
+        result = sync_handler._convert_mqtt_path_to_api("Limits/MaxTemp")
+        assert result == "Limits.MaxTemp"
+
+    def test_array_index_conversion(self, sync_handler: BidirectionalSync) -> None:
+        """Test converting path with array index."""
+        result = sync_handler._convert_mqtt_path_to_api("List/0/Value")
+        assert result == "List[0].Value"
+
+    def test_multiple_array_indices(self, sync_handler: BidirectionalSync) -> None:
+        """Test converting path with multiple array indices."""
+        result = sync_handler._convert_mqtt_path_to_api("Settings/Items/2/Name")
+        assert result == "Settings.Items[2].Name"
+
+    def test_nested_arrays(self, sync_handler: BidirectionalSync) -> None:
+        """Test converting path with nested arrays."""
+        result = sync_handler._convert_mqtt_path_to_api("Matrix/0/1/Value")
+        assert result == "Matrix[0][1].Value"
+
+    def test_single_segment_path(self, sync_handler: BidirectionalSync) -> None:
+        """Test converting single-segment path."""
+        result = sync_handler._convert_mqtt_path_to_api("Temperature")
+        assert result == "Temperature"
+
+    def test_single_array_index(self, sync_handler: BidirectionalSync) -> None:
+        """Test converting single array index."""
+        result = sync_handler._convert_mqtt_path_to_api("0")
+        assert result == "[0]"
 
 
 class TestBidirectionalSyncCommandParsing:

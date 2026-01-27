@@ -226,15 +226,17 @@ class FidelityCalculator:
             # Check if metric has primary semantic ID
             if metric.semantic_id:
                 metrics_with_semantic_id += 1
-                preserved_keys += 1
 
             # Check poly-hierarchical keys
             semantic_keys = getattr(metric, "semantic_keys", ())
             if semantic_keys:
+                # Has poly-hierarchical keys - count them
                 total_possible_keys += len(semantic_keys)
                 preserved_keys += len(semantic_keys)
             elif metric.semantic_id:
+                # Only has primary semantic_id - count it once (not double-counted)
                 total_possible_keys += 1
+                preserved_keys += 1
 
         # Combine two factors:
         # 1. Fraction of metrics with any semantic ID

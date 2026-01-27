@@ -327,6 +327,7 @@ class IncrementalDriftDetector:
         # Ensure parent directory exists
         db_path.parent.mkdir(parents=True, exist_ok=True)
         self._init_db()
+        self._load_state_from_db()
 
     def _init_db(self) -> None:
         """Initialize database schema."""
@@ -359,6 +360,22 @@ class IncrementalDriftDetector:
                 ON drift_history(asset_id, timestamp_ms DESC)
             """)
             conn.commit()
+
+    def _load_state_from_db(self) -> None:
+        """Load persisted schema hashes from database.
+
+        Restores schema hash state from previous runs to prevent spurious
+        drift alerts on daemon restarts.
+        """
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute(
+                "SELECT asset_id, schema_hash FROM drift_state WHERE schema_hash IS NOT NULL"
+            )
+            for row in cursor:
+                self._schema_hashes[row[0]] = row[1]
+
+        if self._schema_hashes:
+            logger.info("Loaded %d schema hashes from persistence", len(self._schema_hashes))
 
     def _get_or_create_forest(self, asset_id: str) -> HalfSpaceForest:
         """Get or create a forest for an asset."""

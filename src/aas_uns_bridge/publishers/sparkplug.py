@@ -123,7 +123,10 @@ class SparkplugPublisher:
             Serialized payload bytes.
         """
         try:
-            from aas_uns_bridge.publishers.sparkplug_payload import PayloadBuilder
+            from aas_uns_bridge.publishers.sparkplug_payload import (
+                SEMANTIC_PROPS,
+                PayloadBuilder,
+            )
 
             builder = PayloadBuilder()
             builder.set_seq(seq)
@@ -131,13 +134,14 @@ class SparkplugPublisher:
                 builder.set_timestamp(timestamp_ms)
 
             for m in metrics:
-                properties = {}
+                # Build semantic properties using standardized aas:* namespaced keys
+                properties: dict[str, Any] = {}
                 if m.get("semantic_id"):
-                    properties["semanticId"] = m["semantic_id"]
+                    properties[SEMANTIC_PROPS["semanticId"]] = m["semantic_id"]
                 if m.get("unit"):
-                    properties["unit"] = m["unit"]
+                    properties[SEMANTIC_PROPS["unit"]] = m["unit"]
                 if m.get("aas_source"):
-                    properties["aasSource"] = m["aas_source"]
+                    properties[SEMANTIC_PROPS["aasSource"]] = m["aas_source"]
 
                 builder.add_metric_from_xsd(
                     name=m["name"],
