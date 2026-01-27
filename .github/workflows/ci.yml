@@ -135,6 +135,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
 
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y mosquitto-clients protobuf-compiler
+
       - name: Generate protobuf bindings
         run: |
           mkdir -p src/aas_uns_bridge/proto
@@ -146,9 +149,6 @@ jobs:
 
       - name: Generate test fixtures
         run: python tests/fixtures/generate_fixtures.py
-
-      - name: Install mosquitto clients
-        run: sudo apt-get update && sudo apt-get install -y mosquitto-clients
 
       - name: Wait for Mosquitto
         run: |
@@ -190,6 +190,9 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
 
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y mosquitto-clients protobuf-compiler
+
       - name: Generate protobuf bindings
         run: |
           mkdir -p src/aas_uns_bridge/proto
@@ -201,9 +204,6 @@ jobs:
 
       - name: Generate test fixtures
         run: python tests/fixtures/generate_fixtures.py
-
-      - name: Install mosquitto clients
-        run: sudo apt-get update && sudo apt-get install -y mosquitto-clients
 
       - name: Wait for Mosquitto
         run: |
