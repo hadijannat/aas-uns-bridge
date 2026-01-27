@@ -127,13 +127,16 @@ class BidirectionalSync:
 
         Filters for topics containing /cmd/ segment to identify command messages.
         Commands follow pattern: {enterprise}/.../asset/cmd/{submodel}/{property}
+        Also handles rootless commands: cmd/{submodel}/{property}
 
         Args:
             topic: The MQTT topic.
             payload: The message payload.
         """
-        # Only process topics containing /cmd/ segment
-        if f"{self._cmd_suffix}/" not in topic:
+        # Only process topics containing /cmd/ segment or starting with cmd/
+        # This handles both rooted (Acme/.../cmd/...) and rootless (cmd/...) topics
+        cmd_with_slash = f"{self._cmd_suffix}/"
+        if not (cmd_with_slash in topic or topic.startswith(cmd_with_slash.lstrip("/"))):
             return
 
         # Skip ack/nak response messages (our own responses to commands)
@@ -175,14 +178,21 @@ class BidirectionalSync:
         Returns:
             WriteCommand if valid, None otherwise.
         """
-        # Find /cmd/ in topic
-        cmd_idx = topic.find(self._cmd_suffix + "/")
+        # Find /cmd/ in topic, or cmd/ at start for rootless topics
+        cmd_with_slash = self._cmd_suffix + "/"  # "/cmd/"
+        cmd_idx = topic.find(cmd_with_slash)
         if cmd_idx == -1:
-            logger.debug("Topic %s doesn't contain %s/", topic, self._cmd_suffix)
-            return None
-
-        # Extract path after /cmd/
-        cmd_path = topic[cmd_idx + len(self._cmd_suffix) + 1 :]
+            # Try rootless: topic starts with "cmd/"
+            rootless_prefix = cmd_with_slash.lstrip("/")  # "cmd/"
+            if topic.startswith(rootless_prefix):
+                cmd_idx = 0
+                cmd_path = topic[len(rootless_prefix) :]
+            else:
+                logger.debug("Topic %s doesn't contain %s", topic, cmd_with_slash)
+                return None
+        else:
+            # Extract path after /cmd/
+            cmd_path = topic[cmd_idx + len(cmd_with_slash) :]
 
         # Split into submodel and property path
         parts = cmd_path.split("/", 1)
@@ -262,6 +272,12 @@ class BidirectionalSync:
             Limits/MaxTemp -> Limits.MaxTemp
             List/0/Value -> List[0].Value
             Settings/Items/2/Name -> Settings.Items[2].Name
+
+        Note:
+            This treats any purely numeric path segment as an array index.
+            If your AAS model has elements with numeric idShorts (e.g., "123"),
+            they will be incorrectly interpreted as array indices. Consider
+            using non-numeric idShorts or prefixing them (e.g., "elem_123").
 
         Args:
             mqtt_path: MQTT-style path with slash separators.

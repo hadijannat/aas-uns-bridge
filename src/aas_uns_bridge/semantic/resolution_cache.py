@@ -344,6 +344,7 @@ class SemanticResolutionCache:
         # Update metrics
         METRICS.semantic_pointers_registered_total.inc()
         METRICS.semantic_cache_size.labels(tier="memory").set(self.memory_size)
+        METRICS.semantic_cache_size.labels(tier="total").set(self.total_size)
 
         return pointer
 
@@ -373,6 +374,10 @@ class SemanticResolutionCache:
         # Batch persist
         if to_persist:
             self._persist_batch(to_persist)
+            # Update metrics after batch registration
+            METRICS.semantic_pointers_registered_total.inc(len(to_persist))
+            METRICS.semantic_cache_size.labels(tier="memory").set(self.memory_size)
+            METRICS.semantic_cache_size.labels(tier="total").set(self.total_size)
 
         return pointers
 

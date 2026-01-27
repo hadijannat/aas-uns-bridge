@@ -130,3 +130,71 @@ semantic:
 
     # Publish lifecycle events to UNS/Sys/Lifecycle/{asset_id}
     publish_lifecycle_events: true
+
+# Semantic hypervisor configuration
+# Advanced features for semantic context management and closed-loop control
+hypervisor:
+  # Semantic resolution cache for pointer mode payload optimization
+  resolution_cache:
+    enabled: false
+    # Maximum entries in memory LRU cache
+    max_memory_entries: 10000
+    # Preload existing entries from database on startup
+    preload_on_startup: true
+
+  # Pointer mode: reduces payload overhead by ~90% using hash references
+  pointer:
+    enabled: false
+    # Payload mode: "inline" (full metadata), "pointer" (hash only), "hybrid" (pointer + minimal)
+    mode: inline
+    # Publish semantic contexts to dedicated topics for consumer resolution
+    publish_context_topics: true
+    # Topic prefix for context publication
+    context_topic_prefix: "UNS/Sys/Context"
+
+  # Information-theoretic fidelity metrics
+  fidelity:
+    enabled: false
+    # Alert threshold for low fidelity (0.0 - 1.0)
+    alert_threshold: 0.7
+    # Weights for overall fidelity score calculation
+    weights:
+      structural: 0.3
+      semantic: 0.5
+      entropy: 0.2
+
+  # Streaming drift detection with Half-Space Trees
+  incremental_drift:
+    enabled: false
+    # Reference window size for anomaly detection
+    window_size: 1000
+    # Number of Half-Space Trees in ensemble
+    num_trees: 25
+    # Severity thresholds for anomaly scores
+    severity_thresholds:
+      low: 0.3
+      medium: 0.5
+      high: 0.7
+      critical: 0.9
+
+  # Bidirectional sync: MQTT command write-back to AAS repository
+  bidirectional:
+    enabled: false
+    # AAS repository URL for write operations
+    aas_repository_url: http://localhost:8080
+    # Optional authentication token
+    # auth_token: your-api-token
+    # Topic suffix identifying command topics
+    command_topic_suffix: /cmd
+    # Glob patterns for allowed write paths
+    allowed_write_patterns:
+      - "Setpoints/*"
+      - "Configuration/*"
+    # Glob patterns for denied write paths (takes precedence)
+    denied_write_patterns:
+      - "readonly/*"
+      - "Identification/*"
+    # Validate writes before executing
+    validate_before_write: true
+    # Publish ack/nak confirmations
+    publish_confirmations: true

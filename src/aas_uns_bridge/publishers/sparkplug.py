@@ -142,6 +142,15 @@ class SparkplugPublisher:
                     properties[SEMANTIC_PROPS["unit"]] = m["unit"]
                 if m.get("aas_source"):
                     properties[SEMANTIC_PROPS["aasSource"]] = m["aas_source"]
+                if m.get("aas_type"):
+                    properties[SEMANTIC_PROPS["aasType"]] = m["aas_type"]
+                if m.get("submodel_semantic_id"):
+                    properties[SEMANTIC_PROPS["submodelSemanticId"]] = m["submodel_semantic_id"]
+                # Include poly-hierarchical semantic keys if present
+                semantic_keys = m.get("semantic_keys")
+                if semantic_keys and len(semantic_keys) > 1:
+                    import json
+                    properties[SEMANTIC_PROPS["semanticKeys"]] = json.dumps(list(semantic_keys))
 
                 builder.add_metric_from_xsd(
                     name=m["name"],
@@ -343,6 +352,9 @@ class SparkplugPublisher:
                     "semantic_id": m.semantic_id,
                     "unit": m.unit,
                     "aas_source": aas_uri or m.aas_source,
+                    "aas_type": m.aas_type,
+                    "submodel_semantic_id": getattr(m, "submodel_semantic_id", None),
+                    "semantic_keys": getattr(m, "semantic_keys", None),
                 }
             )
 

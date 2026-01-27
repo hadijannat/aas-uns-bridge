@@ -184,6 +184,26 @@ class TestBidirectionalSyncFiltering:
         # Should not process response messages
         mock_aas_client.update_property.assert_not_called()
 
+    def test_handler_processes_rootless_cmd_topics(
+        self,
+        mock_mqtt_client: MagicMock,
+        mock_aas_client: MagicMock,
+    ) -> None:
+        """Test that handler processes commands when root_topic is empty."""
+        sync = BidirectionalSync(
+            mqtt_client=mock_mqtt_client,
+            aas_client=mock_aas_client,
+            allowed_patterns=["*/*"],
+        )
+
+        # Rootless command topic (when uns.root_topic is empty)
+        topic = "cmd/Setpoints/Temperature"
+        payload = json.dumps({"value": 25.0}).encode()
+
+        sync._handle_message(topic, payload)
+
+        mock_aas_client.update_property.assert_called_once()
+
 
 class TestBidirectionalSyncPathConversion:
     """Tests for MQTT to REST API path conversion."""
