@@ -1,0 +1,48 @@
+# Test Configuration for E2E Tests
+# Uses predictable topics for verification
+
+mqtt:
+  host: localhost
+  port: 1883
+  client_id: test-bridge
+  keepalive: 30
+  reconnect_delay_min: 0.5
+  reconnect_delay_max: 5.0
+
+uns:
+  enabled: true
+  root_topic: ""
+  qos: 1
+  retain: true
+
+sparkplug:
+  enabled: true
+  group_id: TestGroup
+  edge_node_id: TestNode
+  device_prefix: ""
+  qos: 0
+
+file_watcher:
+  enabled: false
+  watch_dir: ./watch
+  patterns:
+    - "*.aasx"
+    - "*.json"
+  recursive: true
+  debounce_seconds: 0.5
+
+repo_client:
+  enabled: false
+
+state:
+  db_path: ./state/test.db
+  cache_births: true
+  deduplicate_publishes: true
+
+observability:
+  log_level: DEBUG
+  log_format: console
+  metrics_port: 9091
+  health_port: 8081
+
+preferred_language: en

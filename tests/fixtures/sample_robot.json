@@ -1,0 +1,301 @@
+{
+  "assetAdministrationShells": [
+    {
+      "idShort": "RobotAAS",
+      "id": "https://example.com/aas/test-robot-001-aas",
+      "assetInformation": {
+        "assetKind": "Instance",
+        "globalAssetId": "https://example.com/aas/test-robot-001"
+      },
+      "submodels": [
+        {
+          "type": "ModelReference",
+          "keys": [
+            {
+              "type": "Submodel",
+              "value": "https://example.com/submodel/technical-data-001"
+            }
+          ]
+        },
+        {
+          "type": "ModelReference",
+          "keys": [
+            {
+              "type": "Submodel",
+              "value": "https://example.com/submodel/operational-data-001"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "submodels": [
+    {
+      "idShort": "TechnicalData",
+      "id": "https://example.com/submodel/technical-data-001",
+      "semanticId": {
+        "type": "ExternalReference",
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "0173-1#01-AHF578#001"
+          }
+        ]
+      },
+      "submodelElements": [
+        {
+          "idShort": "GeneralInfo",
+          "modelType": "SubmodelElementCollection",
+          "value": [
+            {
+              "idShort": "Manufacturer",
+              "modelType": "Property",
+              "valueType": "xs:string",
+              "value": "RoboCorp Industries",
+              "semanticId": {
+                "type": "ExternalReference",
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "0173-1#02-AAO677#002"
+                  }
+                ]
+              }
+            },
+            {
+              "idShort": "Model",
+              "modelType": "Property",
+              "valueType": "xs:string",
+              "value": "RX-7500",
+              "semanticId": {
+                "type": "ExternalReference",
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "0173-1#02-AAO678#002"
+                  }
+                ]
+              }
+            },
+            {
+              "idShort": "SerialNumber",
+              "modelType": "Property",
+              "valueType": "xs:string",
+              "value": "SN-2024-001234"
+            },
+            {
+              "idShort": "ProductDescription",
+              "modelType": "MultiLanguageProperty",
+              "value": [
+                {
+                  "language": "en",
+                  "text": "Industrial robot arm for precision assembly"
+                },
+                {
+                  "language": "de",
+                  "text": "Industrieroboterarm für Präzisionsmontage"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "idShort": "Specifications",
+          "modelType": "SubmodelElementCollection",
+          "value": [
+            {
+              "idShort": "MaxPayload",
+              "modelType": "Property",
+              "valueType": "xs:double",
+              "value": "7.5",
+              "semanticId": {
+                "type": "ExternalReference",
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "0173-1#02-AAB567#001"
+                  }
+                ]
+              }
+            },
+            {
+              "idShort": "Reach",
+              "modelType": "Property",
+              "valueType": "xs:int",
+              "value": "1500",
+              "semanticId": {
+                "type": "ExternalReference",
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "0173-1#02-AAB568#001"
+                  }
+                ]
+              }
+            },
+            {
+              "idShort": "OperatingTempMin",
+              "modelType": "Property",
+              "valueType": "xs:double",
+              "value": "5.0",
+              "semanticId": {
+                "type": "ExternalReference",
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "0173-1#02-AAB569#001"
+                  }
+                ]
+              }
+            },
+            {
+              "idShort": "OperatingTempMax",
+              "modelType": "Property",
+              "valueType": "xs:double",
+              "value": "45.0",
+              "semanticId": {
+                "type": "ExternalReference",
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "0173-1#02-AAB569#002"
+                  }
+                ]
+              }
+            },
+            {
+              "idShort": "Axes",
+              "modelType": "Property",
+              "valueType": "xs:int",
+              "value": "6"
+            },
+            {
+              "idShort": "Repeatability",
+              "modelType": "Property",
+              "valueType": "xs:double",
+              "value": "0.02"
+            }
+          ]
+        },
+        {
+          "idShort": "AxisDetails",
+          "modelType": "SubmodelElementCollection",
+          "value": [
+            {
+              "idShort": "Axis1",
+              "modelType": "SubmodelElementCollection",
+              "value": [
+                {
+                  "idShort": "Name",
+                  "modelType": "Property",
+                  "valueType": "xs:string",
+                  "value": "Base Rotation"
+                },
+                {
+                  "idShort": "MaxSpeed",
+                  "modelType": "Property",
+                  "valueType": "xs:double",
+                  "value": "120.0"
+                },
+                {
+                  "idShort": "MinAngle",
+                  "modelType": "Property",
+                  "valueType": "xs:double",
+                  "value": "-180.0"
+                },
+                {
+                  "idShort": "MaxAngle",
+                  "modelType": "Property",
+                  "valueType": "xs:double",
+                  "value": "180.0"
+                }
+              ]
+            },
+            {
+              "idShort": "Axis2",
+              "modelType": "SubmodelElementCollection",
+              "value": [
+                {
+                  "idShort": "Name",
+                  "modelType": "Property",
+                  "valueType": "xs:string",
+                  "value": "Shoulder"
+                },
+                {
+                  "idShort": "MaxSpeed",
+                  "modelType": "Property",
+                  "valueType": "xs:double",
+                  "value": "100.0"
+                },
+                {
+                  "idShort": "MinAngle",
+                  "modelType": "Property",
+                  "valueType": "xs:double",
+                  "value": "-90.0"
+                },
+                {
+                  "idShort": "MaxAngle",
+                  "modelType": "Property",
+                  "valueType": "xs:double",
+                  "value": "90.0"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "idShort": "OperationalData",
+      "id": "https://example.com/submodel/operational-data-001",
+      "semanticId": {
+        "type": "ExternalReference",
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "0173-1#01-AHF579#001"
+          }
+        ]
+      },
+      "submodelElements": [
+        {
+          "idShort": "Status",
+          "modelType": "Property",
+          "valueType": "xs:string",
+          "value": "Running"
+        },
+        {
+          "idShort": "CycleCount",
+          "modelType": "Property",
+          "valueType": "xs:long",
+          "value": "125430"
+        },
+        {
+          "idShort": "CurrentTemperature",
+          "modelType": "Property",
+          "valueType": "xs:double",
+          "value": "32.5"
+        },
+        {
+          "idShort": "PowerConsumption",
+          "modelType": "Property",
+          "valueType": "xs:double",
+          "value": "2.4"
+        },
+        {
+          "idShort": "ErrorCode",
+          "modelType": "Property",
+          "valueType": "xs:int",
+          "value": "0"
+        },
+        {
+          "idShort": "IsOperational",
+          "modelType": "Property",
+          "valueType": "xs:boolean",
+          "value": "true"
+        }
+      ]
+    }
+  ],
+  "conceptDescriptions": []
+}

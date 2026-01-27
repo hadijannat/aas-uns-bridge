@@ -1,0 +1,7 @@
+{
+  "assetAdministrationShells": [
+    {
+      "idShort": "InvalidJSON",
+      "id": "https://example.com/aas/invalid"
+    // This is an intentionally malformed JSON with a comment (invalid JSON)
+    // Missing closing brackets and other issues

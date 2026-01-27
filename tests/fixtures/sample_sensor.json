@@ -1,0 +1,122 @@
+{
+  "assetAdministrationShells": [
+    {
+      "idShort": "TemperatureSensorAAS",
+      "id": "https://example.com/aas/test-sensor-001-aas",
+      "assetInformation": {
+        "assetKind": "Instance",
+        "globalAssetId": "https://example.com/aas/test-sensor-001"
+      },
+      "submodels": [
+        {
+          "type": "ModelReference",
+          "keys": [
+            {
+              "type": "Submodel",
+              "value": "https://example.com/submodel/sensor-technical-001"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "submodels": [
+    {
+      "idShort": "SensorData",
+      "id": "https://example.com/submodel/sensor-technical-001",
+      "semanticId": {
+        "type": "ExternalReference",
+        "keys": [
+          {
+            "type": "GlobalReference",
+            "value": "0173-1#01-AHF580#001"
+          }
+        ]
+      },
+      "submodelElements": [
+        {
+          "idShort": "Identification",
+          "modelType": "SubmodelElementCollection",
+          "value": [
+            {
+              "idShort": "Manufacturer",
+              "modelType": "Property",
+              "valueType": "xs:string",
+              "value": "SensorTech Inc.",
+              "semanticId": {
+                "type": "ExternalReference",
+                "keys": [
+                  {
+                    "type": "GlobalReference",
+                    "value": "0173-1#02-AAO677#002"
+                  }
+                ]
+              }
+            },
+            {
+              "idShort": "ProductType",
+              "modelType": "Property",
+              "valueType": "xs:string",
+              "value": "PT-100 RTD"
+            },
+            {
+              "idShort": "SerialNumber",
+              "modelType": "Property",
+              "valueType": "xs:string",
+              "value": "TEMP-2024-5678"
+            }
+          ]
+        },
+        {
+          "idShort": "MeasurementMin",
+          "modelType": "Property",
+          "valueType": "xs:double",
+          "value": "-50.0",
+          "semanticId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "0173-1#02-AAB123#001"
+              }
+            ]
+          }
+        },
+        {
+          "idShort": "MeasurementMax",
+          "modelType": "Property",
+          "valueType": "xs:double",
+          "value": "200.0",
+          "semanticId": {
+            "type": "ExternalReference",
+            "keys": [
+              {
+                "type": "GlobalReference",
+                "value": "0173-1#02-AAB123#002"
+              }
+            ]
+          }
+        },
+        {
+          "idShort": "CurrentReading",
+          "modelType": "Property",
+          "valueType": "xs:double",
+          "value": "25.7"
+        },
+        {
+          "idShort": "Accuracy",
+          "modelType": "Property",
+          "valueType": "xs:double",
+          "value": "0.1"
+        },
+        {
+          "idShort": "IsCalibrated",
+          "modelType": "Property",
+          "valueType": "xs:boolean",
+          "value": "true"
+        }
+      ]
+    }
+  ],
+  "conceptDescriptions": []
+}

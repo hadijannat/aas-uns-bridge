@@ -1,0 +1,49 @@
+{
+  "assetAdministrationShells": [
+    {
+      "idShort": "EmptyCollectionAAS",
+      "id": "https://example.com/aas/empty-collection-001",
+      "assetInformation": {
+        "assetKind": "Instance",
+        "globalAssetId": "https://example.com/aas/empty-collection-001"
+      },
+      "submodels": [
+        {
+          "type": "ModelReference",
+          "keys": [
+            {
+              "type": "Submodel",
+              "value": "https://example.com/submodel/empty-collection"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "submodels": [
+    {
+      "idShort": "DataWithEmptyCollection",
+      "id": "https://example.com/submodel/empty-collection",
+      "submodelElements": [
+        {
+          "idShort": "EmptyCollection",
+          "modelType": "SubmodelElementCollection",
+          "value": []
+        },
+        {
+          "idShort": "EmptyList",
+          "modelType": "SubmodelElementList",
+          "typeValueListElement": "Property",
+          "value": []
+        },
+        {
+          "idShort": "ValidProperty",
+          "modelType": "Property",
+          "valueType": "xs:string",
+          "value": "This property is valid"
+        }
+      ]
+    }
+  ],
+  "conceptDescriptions": []
+}

@@ -1,0 +1,60 @@
+{
+  "assetAdministrationShells": [
+    {
+      "idShort": "MissingIdShortAAS",
+      "id": "https://example.com/aas/missing-idshort-001",
+      "assetInformation": {
+        "assetKind": "Instance",
+        "globalAssetId": "https://example.com/aas/missing-idshort-001"
+      },
+      "submodels": [
+        {
+          "type": "ModelReference",
+          "keys": [
+            {
+              "type": "Submodel",
+              "value": "https://example.com/submodel/missing-idshort"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "submodels": [
+    {
+      "idShort": "MixedProperties",
+      "id": "https://example.com/submodel/missing-idshort",
+      "submodelElements": [
+        {
+          "modelType": "Property",
+          "valueType": "xs:string",
+          "value": "Property without idShort"
+        },
+        {
+          "idShort": "ValidProperty",
+          "modelType": "Property",
+          "valueType": "xs:int",
+          "value": 100
+        },
+        {
+          "idShort": "CollectionWithMissingIdShort",
+          "modelType": "SubmodelElementCollection",
+          "value": [
+            {
+              "modelType": "Property",
+              "valueType": "xs:string",
+              "value": "Nested property without idShort"
+            },
+            {
+              "idShort": "NestedValidProperty",
+              "modelType": "Property",
+              "valueType": "xs:double",
+              "value": 3.14
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "conceptDescriptions": []
+}

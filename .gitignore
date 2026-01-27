@@ -40,6 +40,10 @@ htmlcov/
 .tox/
 .nox/
 
+# Generated test fixtures
+tests/fixtures/*.aasx
+tests/fixtures/large_aas_5k_properties.json
+
 # MyPy
 .mypy_cache/
 
@@ -77,3 +81,9 @@ docker/mosquitto/log/
 .DS_Store
 Thumbs.db
 .hypothesis/
+
+# Claude Code
+CLAUDE.md
+
+# Local contributor guide
+AGENTS.md

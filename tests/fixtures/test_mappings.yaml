@@ -1,0 +1,40 @@
+# Test Mappings for E2E Tests
+# Maps test assets to predictable ISA-95 hierarchies
+
+default:
+  enterprise: TestEnterprise
+  site: TestSite
+  area: TestArea
+  line: TestLine
+
+assets:
+  # Sample Robot from test fixtures
+  "https://example.com/aas/test-robot-001":
+    enterprise: AcmeCorp
+    site: PlantA
+    area: Assembly
+    line: Line1
+    asset: Robot001
+
+  # Sample Sensor from test fixtures
+  "https://example.com/aas/test-sensor-001":
+    enterprise: AcmeCorp
+    site: PlantA
+    area: Assembly
+    line: Line1
+    asset: Sensor001
+
+  # Large AAS for load testing
+  "https://example.com/aas/load-test-asset":
+    enterprise: LoadTest
+    site: Performance
+    area: Stress
+    line: Line1
+    asset: LargeAsset
+
+patterns:
+  - pattern: "https://example.com/aas/test-*"
+    enterprise: AcmeCorp
+    site: PlantA
+    area: Testing
+    line: TestLine

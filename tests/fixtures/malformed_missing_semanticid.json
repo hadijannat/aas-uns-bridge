@@ -1,0 +1,44 @@
+{
+  "assetAdministrationShells": [
+    {
+      "idShort": "MalformedAAS",
+      "id": "https://example.com/aas/malformed-001",
+      "assetInformation": {
+        "assetKind": "Instance",
+        "globalAssetId": "https://example.com/aas/malformed-001"
+      },
+      "submodels": [
+        {
+          "type": "ModelReference",
+          "keys": [
+            {
+              "type": "Submodel",
+              "value": "https://example.com/submodel/no-semantic-id"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "submodels": [
+    {
+      "idShort": "NoSemanticData",
+      "id": "https://example.com/submodel/no-semantic-id",
+      "submodelElements": [
+        {
+          "idShort": "PropertyWithoutSemanticId",
+          "modelType": "Property",
+          "valueType": "xs:string",
+          "value": "Test Value Without SemanticId"
+        },
+        {
+          "idShort": "AnotherProperty",
+          "modelType": "Property",
+          "valueType": "xs:int",
+          "value": "42"
+        }
+      ]
+    }
+  ],
+  "conceptDescriptions": []
+}
