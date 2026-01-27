@@ -71,11 +71,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - uses: actions/checkout@v4
+
       - name: Start Mosquitto
         run: |
-          docker run -d --name mosquitto -p 1883:1883 eclipse-mosquitto:2 \
-            mosquitto -c /dev/null -p 1883 -v
-      - uses: actions/checkout@v4
+          echo -e "listener 1883\nallow_anonymous true" > /tmp/mosquitto.conf
+          docker run -d --name mosquitto -p 1883:1883 -v /tmp/mosquitto.conf:/mosquitto/config/mosquitto.conf eclipse-mosquitto:2
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -120,8 +121,8 @@ jobs:
 
       - name: Start Mosquitto
         run: |
-          docker run -d --name mosquitto -p 1883:1883 eclipse-mosquitto:2 \
-            mosquitto -c /dev/null -p 1883 -v
+          echo -e "listener 1883\nallow_anonymous true" > /tmp/mosquitto.conf
+          docker run -d --name mosquitto -p 1883:1883 -v /tmp/mosquitto.conf:/mosquitto/config/mosquitto.conf eclipse-mosquitto:2
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -175,8 +176,8 @@ jobs:
 
       - name: Start Mosquitto
         run: |
-          docker run -d --name mosquitto -p 1883:1883 eclipse-mosquitto:2 \
-            mosquitto -c /dev/null -p 1883 -v
+          echo -e "listener 1883\nallow_anonymous true" > /tmp/mosquitto.conf
+          docker run -d --name mosquitto -p 1883:1883 -v /tmp/mosquitto.conf:/mosquitto/config/mosquitto.conf eclipse-mosquitto:2
 
       - name: Set up Python
         uses: actions/setup-python@v5

@@ -61,6 +61,7 @@ class BirthCache:
     def _store(self, key: str, topic: str, payload: bytes) -> None:
         """Store a payload in the cache."""
         import time
+
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
                 """
@@ -109,9 +110,7 @@ class BirthCache:
             List of device identifiers.
         """
         with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute(
-                "SELECT key FROM birth_cache WHERE key LIKE 'dbirth:%'"
-            )
+            cursor = conn.execute("SELECT key FROM birth_cache WHERE key LIKE 'dbirth:%'")
             return [row[0].replace("dbirth:", "") for row in cursor]
 
     def remove_dbirth(self, device_id: str) -> None:

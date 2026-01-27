@@ -130,6 +130,7 @@ class LastPublishedHashes:
             topic_metrics: Mapping of topics to published metrics.
         """
         import time
+
         now = int(time.time())
 
         for topic, metric in topic_metrics.items():
