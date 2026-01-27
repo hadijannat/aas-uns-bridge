@@ -368,7 +368,10 @@ class TestEntityElement:
         assert "Assets.LinkedAsset.entityType" in paths
         assert "Assets.LinkedAsset.globalAssetId" in paths
         assert paths["Assets.LinkedAsset.entityType"].value == "SELF_MANAGED_ENTITY"
-        assert paths["Assets.LinkedAsset.globalAssetId"].value == "https://example.com/asset/linked-001"
+        assert (
+            paths["Assets.LinkedAsset.globalAssetId"].value
+            == "https://example.com/asset/linked-001"
+        )
         assert paths["Assets.LinkedAsset.entityType"].aas_type == "Entity.entityType"
         assert paths["Assets.LinkedAsset.globalAssetId"].aas_type == "Entity.globalAssetId"
 
