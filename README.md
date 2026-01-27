@@ -31,58 +31,146 @@ The semantic hypervisor transforms the bridge from a passive translator into an 
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                            AAS-UNS Bridge                                   │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  ┌──────────────┐    ┌────────────────┐    ┌───────────────────┐           │
-│  │ File Watcher │───▶│   AAS Loader   │───▶│    Traversal      │           │
-│  │  (watchdog)  │    │ (BaSyx SDK)    │    │  (flatten SMEs)   │           │
-│  └──────────────┘    └────────────────┘    └─────────┬─────────┘           │
-│                                                      │                     │
-│  ┌──────────────┐                                    │                     │
-│  │  REST Poller │───────────────────────────────────▶│                     │
-│  │  (httpx)     │                                    │                     │
-│  └──────────────┘                                    ▼                     │
-│                                            ┌─────────────────┐             │
-│                                            │  ISA-95 Mapper  │             │
-│                                            │ (topic builder) │             │
-│                                            └────────┬────────┘             │
-│                                                     │                      │
-│  ┌──────────────────────────────────────────────────┼────────────────────┐ │
-│  │                    Semantic Hypervisor           │                    │ │
-│  │  ┌────────────┐  ┌─────────────┐  ┌────────────┐ │  ┌──────────────┐  │ │
-│  │  │ Validation │  │   Pointer   │  │   Drift    │ │  │  Lifecycle   │  │ │
-│  │  │ (sQoS 1+)  │  │   Mode      │  │ Detection  │─┼─▶│  Tracking    │  │ │
-│  │  └────────────┘  └─────────────┘  └────────────┘ │  └──────────────┘  │ │
-│  │  ┌────────────┐  ┌─────────────┐  ┌────────────┐ │                    │ │
-│  │  │  Fidelity  │  │ Resolution  │  │Bidirectional│◀─── MQTT Commands   │ │
-│  │  │  Metrics   │  │   Cache     │  │   Sync     │ │                    │ │
-│  │  └────────────┘  └─────────────┘  └────────────┘ │                    │ │
-│  └──────────────────────────────────────────────────┼────────────────────┘ │
-│                                                     │                      │
-│                          ┌──────────────────────────┼─────────────────┐    │
-│                          │                          │                 │    │
-│                          ▼                          ▼                 │    │
-│               ┌────────────────────┐    ┌────────────────────┐        │    │
-│               │  UNS Publisher     │    │ Sparkplug Publisher│        │    │
-│               │  (retained JSON)   │    │ (protobuf births)  │        │    │
-│               └─────────┬──────────┘    └─────────┬──────────┘        │    │
-│                         │                         │                   │    │
-│                         └────────────┬────────────┘                   │    │
-│                                      │                                │    │
-│                                      ▼                                │    │
-│                              ┌──────────────┐                         │    │
-│                              │ MQTT Client  │◀────────────────────────┘    │
-│                              │ (paho v2)    │                              │
-│                              └──────┬───────┘                              │
-└─────────────────────────────────────┼──────────────────────────────────────┘
-                                      │
-                                      ▼
-                              ┌──────────────┐
-                              │ MQTT Broker  │
-                              └──────────────┘
+```mermaid
+flowchart TB
+    subgraph Entry["📥 Entry Points"]
+        FW["AASFileHandler<br/><i>daemon.py</i><br/>watchdog events"]
+        RC["AASRepoClient<br/><i>aas/repo_client.py</i><br/>REST polling"]
+    end
+
+    subgraph Ingestion["📦 Ingestion Layer"]
+        L["load_aasx() / load_json()<br/><i>aas/loader.py</i>"]
+        T["flatten_submodel()<br/><i>aas/traversal.py</i>"]
+        CM[("ContextMetric[]<br/><i>domain/models.py</i><br/>frozen dataclass")]
+    end
+
+    subgraph Hypervisor["🔬 Semantic Hypervisor Layer"]
+        direction TB
+        subgraph Validation["sQoS Enforcement"]
+            SV["SemanticValidator<br/><i>validation/semantic_validator.py</i>"]
+        end
+        subgraph DriftDetection["Drift Detection"]
+            DD["DriftDetector<br/><i>state/drift_detector.py</i><br/>schema fingerprints"]
+            SD["IncrementalDriftDetector<br/><i>state/streaming_drift.py</i><br/>Half-Space Trees"]
+        end
+        subgraph Tracking["Asset Tracking"]
+            LT["AssetLifecycleTracker<br/><i>state/asset_lifecycle.py</i><br/>online/stale/offline"]
+            FC["FidelityCalculator<br/><i>semantic/fidelity.py</i><br/>information-theoretic"]
+        end
+        subgraph Context["Semantic Context"]
+            SRC["SemanticResolutionCache<br/><i>semantic/resolution_cache.py</i><br/>LRU + SQLite"]
+        end
+    end
+
+    subgraph MappingLayer["🗺️ Mapping & Deduplication"]
+        M["ISA95Mapper<br/><i>mapping/isa95.py</i><br/>→ AssetIdentity"]
+        LPH["LastPublishedHashes<br/><i>state/last_published.py</i><br/>hash deduplication"]
+    end
+
+    subgraph Publishers["📤 Publication Layer"]
+        subgraph UNS["UNS Publisher"]
+            UP["UnsRetainedPublisher<br/><i>publishers/uns_retained.py</i>"]
+            PM["Payload Modes:<br/>• inline (full metadata)<br/>• pointer (hash ref)<br/>• hybrid"]
+            CP["ContextPublisher<br/><i>publishers/context_publisher.py</i><br/>UNS/Sys/Context/{dict}/{hash}"]
+        end
+        subgraph Sparkplug["Sparkplug B Publisher"]
+            SP["SparkplugPublisher<br/><i>publishers/sparkplug.py</i>"]
+            SL["Lifecycle:<br/>NBIRTH → DBIRTH →<br/>NDATA/DDATA →<br/>DDEATH → NDEATH"]
+        end
+    end
+
+    subgraph Transport["🔌 Transport Layer"]
+        MQTT["MqttClient<br/><i>mqtt/client.py</i><br/>paho v2.0 + MQTTv5"]
+        Broker[("MQTT Broker<br/>(v5)")]
+    end
+
+    subgraph Bidirectional["↔️ Bidirectional Sync"]
+        BS["BidirectionalSync<br/><i>sync/bidirectional.py</i><br/>.../cmd/{submodel}/{prop}"]
+        AAS[("AAS Repository<br/>write-back")]
+    end
+
+    subgraph State["💾 State Persistence"]
+        DB1[("aliases.db<br/>Sparkplug aliases")]
+        DB2[("births.db<br/>BIRTH cache")]
+        DB3[("hashes.db<br/>deduplication")]
+        DB4[("drift.db<br/>fingerprints")]
+        DB5[("lifecycle.db<br/>asset states")]
+        DB6[("fidelity.db<br/>history")]
+        DB7[("streaming_drift.db<br/>HST forest")]
+        DB8[("semantic_cache.db<br/>contexts")]
+    end
+
+    subgraph Observability["📊 Observability"]
+        MET["MetricsServer<br/><i>metrics.py</i><br/>Prometheus :9090"]
+        HLT["HealthServer<br/><i>health.py</i><br/>liveness/readiness :8080"]
+        LOG["setup_logging()<br/><i>logging.py</i><br/>structured JSON"]
+    end
+
+    %% Data Flow
+    FW --> L
+    RC --> L
+    L --> T
+    T --> CM
+
+    CM --> SV
+    CM --> DD
+    CM --> SD
+    SV --> FC
+    DD --> LT
+    SD --> SRC
+
+    SRC --> M
+    M --> LPH
+
+    LPH --> UP
+    LPH --> SP
+    UP --> PM
+    UP --> CP
+    SP --> SL
+
+    UP --> MQTT
+    SP --> MQTT
+    CP --> MQTT
+    MQTT --> Broker
+
+    Broker --> BS
+    BS --> AAS
+
+    %% State connections
+    SP -.-> DB1
+    SP -.-> DB2
+    LPH -.-> DB3
+    DD -.-> DB4
+    LT -.-> DB5
+    FC -.-> DB6
+    SD -.-> DB7
+    SRC -.-> DB8
+
+    %% Observability connections
+    UP -.-> MET
+    SP -.-> MET
+    SV -.-> MET
+    DD -.-> MET
+    LT -.-> MET
+
+    %% Styling
+    classDef entry fill:#e1f5fe,stroke:#01579b
+    classDef ingestion fill:#f3e5f5,stroke:#7b1fa2
+    classDef hypervisor fill:#fff3e0,stroke:#e65100
+    classDef mapping fill:#e8f5e9,stroke:#2e7d32
+    classDef publisher fill:#fce4ec,stroke:#c2185b
+    classDef transport fill:#e3f2fd,stroke:#1565c0
+    classDef state fill:#f5f5f5,stroke:#616161
+    classDef observability fill:#fffde7,stroke:#f9a825
+
+    class FW,RC entry
+    class L,T,CM ingestion
+    class SV,DD,SD,LT,FC,SRC hypervisor
+    class M,LPH mapping
+    class UP,PM,CP,SP,SL publisher
+    class MQTT,Broker,BS,AAS transport
+    class DB1,DB2,DB3,DB4,DB5,DB6,DB7,DB8 state
+    class MET,HLT,LOG observability
 ```
 
 ## Quick Start
