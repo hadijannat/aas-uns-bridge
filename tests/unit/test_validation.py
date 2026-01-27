@@ -4,7 +4,7 @@ import pytest
 
 from aas_uns_bridge.config import ValidationConfig, ValueConstraint
 from aas_uns_bridge.domain.models import ContextMetric
-from aas_uns_bridge.validation import SemanticValidator, ValidationError
+from aas_uns_bridge.validation import SemanticValidator
 from aas_uns_bridge.validation.semantic_validator import ErrorType
 
 

@@ -11,8 +11,6 @@ from aas_uns_bridge.config import LifecycleConfig
 from aas_uns_bridge.state.asset_lifecycle import (
     AssetLifecycleTracker,
     AssetState,
-    AssetStatus,
-    LifecycleEvent,
 )
 
 

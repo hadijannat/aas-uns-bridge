@@ -1,7 +1,8 @@
 """Unit tests for MQTT v5 User Properties support."""
 
-import pytest
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from aas_uns_bridge.config import SemanticConfig, UnsConfig
 from aas_uns_bridge.domain.models import ContextMetric
@@ -160,10 +161,10 @@ class TestMqttClientUserProperties:
 
     def test_publish_builds_properties(self) -> None:
         """Test that publish method builds MQTT Properties correctly."""
-        with patch("aas_uns_bridge.mqtt.client.mqtt.Client") as MockClient:
+        with patch("aas_uns_bridge.mqtt.client.mqtt.Client") as mock_client_cls:
             from aas_uns_bridge.config import MqttConfig
 
-            mock_instance = MockClient.return_value
+            mock_instance = mock_client_cls.return_value
             mock_instance.is_connected.return_value = True
 
             # Simulate successful publish
