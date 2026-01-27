@@ -7,7 +7,9 @@ from typing import Any
 from aas_uns_bridge.config import SparkplugConfig
 from aas_uns_bridge.domain.models import ContextMetric
 from aas_uns_bridge.mqtt.client import MqttClient
+from aas_uns_bridge.observability.metrics import METRICS
 from aas_uns_bridge.state.alias_db import AliasDB
+from aas_uns_bridge.state.birth_cache import BirthCache
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +32,7 @@ class SparkplugPublisher:
         mqtt_client: MqttClient,
         config: SparkplugConfig,
         alias_db: AliasDB,
+        birth_cache: BirthCache | None = None,
     ):
         """Initialize the Sparkplug publisher.
 
@@ -41,12 +44,15 @@ class SparkplugPublisher:
         self.client = mqtt_client
         self.config = config
         self.alias_db = alias_db
+        self._birth_cache = birth_cache
 
         self._bd_seq = 0  # Birth/death sequence
         self._seq = 0  # Message sequence (0-255)
         self._is_online = False
         self._devices: set[str] = set()
+        self._device_metrics: dict[str, dict[str, ContextMetric]] = {}
         self._birth_count = 0
+        self._has_published_nbirth = False
 
         # Set up LWT for NDEATH
         self._setup_lwt()
@@ -57,6 +63,10 @@ class SparkplugPublisher:
         ndeath_payload = self._build_ndeath_payload()
         self.client.set_lwt(ndeath_topic, ndeath_payload, qos=0, retain=False)
         logger.debug("Set NDEATH LWT on %s", ndeath_topic)
+
+    def mark_offline(self) -> None:
+        """Mark the edge node as offline after disconnect."""
+        self._is_online = False
 
     def _build_topic(self, msg_type: str, device_id: str | None = None) -> str:
         """Build a Sparkplug B topic.
@@ -151,6 +161,92 @@ class SparkplugPublisher:
             }
             return json.dumps(payload).encode("utf-8")
 
+    def _decode_payload(self, payload: bytes) -> Any | None:
+        """Decode a Sparkplug protobuf payload if available."""
+        try:
+            from aas_uns_bridge.proto import sparkplug_b_pb2 as spb
+
+            decoded = spb.Payload()
+            decoded.ParseFromString(payload)
+            return decoded
+        except Exception as exc:  # pragma: no cover - depends on optional proto
+            logger.debug("Failed to decode Sparkplug payload: %s", exc)
+            return None
+
+    def _metric_truthy(self, metric: Any) -> bool:
+        """Evaluate a Sparkplug metric value as truthy."""
+        if getattr(metric, "boolean_value", False):
+            return True
+        if getattr(metric, "int_value", 0):
+            return True
+        if getattr(metric, "long_value", 0):
+            return True
+        if getattr(metric, "float_value", 0.0):
+            return True
+        if getattr(metric, "double_value", 0.0):
+            return True
+        if hasattr(metric, "string_value"):
+            return str(metric.string_value).strip().lower() in {"true", "1", "yes", "y", "on"}
+        return False
+
+    def _payload_requests_rebirth(self, payload: bytes) -> bool:
+        """Check if a payload contains a Rebirth request."""
+        decoded = self._decode_payload(payload)
+        if decoded is None:
+            return b"Rebirth" in payload
+
+        for metric in decoded.metrics:
+            name = metric.name or ""
+            if name.endswith("Rebirth") or "Rebirth" in name:
+                if self._metric_truthy(metric):
+                    return True
+        return False
+
+    def _store_device_metrics(self, device_id: str, metrics: list[ContextMetric]) -> None:
+        """Store the full metric set for a device."""
+        self._device_metrics[device_id] = {metric.path: metric for metric in metrics}
+
+    def _merge_device_metrics(self, device_id: str, metrics: list[ContextMetric]) -> None:
+        """Merge updated metrics into the stored device metrics."""
+        if device_id not in self._device_metrics:
+            self._device_metrics[device_id] = {}
+        for metric in metrics:
+            self._device_metrics[device_id][metric.path] = metric
+
+    def _collect_device_metrics(self, device_id: str) -> list[ContextMetric]:
+        """Return stored metrics for a device."""
+        return list(self._device_metrics.get(device_id, {}).values())
+
+    def _refresh_payload(self, payload: bytes, seq: int, timestamp_ms: int | None = None) -> bytes:
+        """Refresh seq/timestamp fields in a cached payload."""
+        decoded = self._decode_payload(payload)
+        if decoded is None:
+            return payload
+
+        decoded.seq = seq
+        decoded.timestamp = timestamp_ms or int(time.time() * 1000)
+        return decoded.SerializeToString()
+
+    def _publish_cached_dbirth(self, device_id: str) -> bool:
+        """Publish a cached DBIRTH payload if available."""
+        if not self._birth_cache:
+            return False
+
+        cached = self._birth_cache.get_dbirth(device_id)
+        if not cached:
+            return False
+
+        topic, payload = cached
+        refreshed = self._refresh_payload(payload, self._next_seq())
+        self.client.publish(topic, refreshed, qos=0, retain=False)
+        self._devices.add(device_id)
+        self._birth_count += 1
+        METRICS.sparkplug_births_total.labels(birth_type="dbirth").inc()
+        METRICS.active_devices.set(len(self._devices))
+        METRICS.last_publish_timestamp.set(time.time())
+        logger.info("Republished cached DBIRTH to %s", topic)
+        return True
+
     def publish_nbirth(self) -> None:
         """Publish Node Birth (NBIRTH) message.
 
@@ -160,6 +256,11 @@ class SparkplugPublisher:
         """
         if not self.config.enabled:
             return
+
+        if not self._is_online and self._has_published_nbirth:
+            # New session after disconnect: increment birth/death sequence
+            self._bd_seq += 1
+            self._seq = 0
 
         timestamp_ms = int(time.time() * 1000)
 
@@ -184,13 +285,23 @@ class SparkplugPublisher:
         # Sparkplug requires retain=false, QoS=0 for births
         self.client.publish(topic, payload, qos=0, retain=False)
 
+        if self._birth_cache:
+            self._birth_cache.store_nbirth(topic, payload)
+
         self._is_online = True
+        self._has_published_nbirth = True
         self._birth_count += 1
+        METRICS.sparkplug_births_total.labels(birth_type="nbirth").inc()
+        METRICS.last_publish_timestamp.set(time.time())
         logger.info("Published NBIRTH to %s (bdSeq=%d)", topic, self._bd_seq)
 
         # Subscribe to NCMD for rebirth requests
         ncmd_topic = self._build_topic("NCMD")
         self.client.subscribe(ncmd_topic, self._handle_ncmd)
+
+        # Subscribe to DCMD for device-specific commands
+        dcmd_topic = f"{self._build_topic('DCMD')}/#"
+        self.client.subscribe(dcmd_topic, self._handle_dcmd)
 
     def publish_dbirth(
         self,
@@ -237,8 +348,16 @@ class SparkplugPublisher:
         self.client.publish(topic, payload, qos=0, retain=False)
 
         self._devices.add(device_id)
+        self._store_device_metrics(device_id, metrics)
         self._birth_count += 1
+        METRICS.sparkplug_births_total.labels(birth_type="dbirth").inc()
+        METRICS.active_devices.set(len(self._devices))
+        METRICS.alias_count.set(self.alias_db.count)
+        METRICS.last_publish_timestamp.set(time.time())
         logger.info("Published DBIRTH to %s (%d metrics)", topic, len(metrics))
+
+        if self._birth_cache:
+            self._birth_cache.store_dbirth(device_id, topic, payload)
 
     def publish_ddata(
         self,
@@ -258,6 +377,11 @@ class SparkplugPublisher:
             # Device not born yet, need DBIRTH first
             self.publish_dbirth(device_id, metrics)
             return
+
+        if not metrics:
+            return
+
+        self._merge_device_metrics(device_id, metrics)
 
         timestamp_ms = int(time.time() * 1000)
 
@@ -279,6 +403,8 @@ class SparkplugPublisher:
         topic = self._build_topic("DDATA", device_id)
 
         self.client.publish(topic, payload, qos=self.config.qos, retain=False)
+        METRICS.sparkplug_data_total.inc()
+        METRICS.last_publish_timestamp.set(time.time())
         logger.debug("Published DDATA to %s (%d metrics)", topic, len(metrics))
 
     def publish_ddeath(self, device_id: str) -> None:
@@ -296,6 +422,8 @@ class SparkplugPublisher:
         self.client.publish(topic, payload, qos=0, retain=False)
 
         self._devices.discard(device_id)
+        METRICS.active_devices.set(len(self._devices))
+        METRICS.last_publish_timestamp.set(time.time())
         logger.info("Published DDEATH to %s", topic)
 
     def _handle_ncmd(self, topic: str, payload: bytes) -> None:
@@ -309,31 +437,87 @@ class SparkplugPublisher:
         """
         logger.info("Received NCMD on %s", topic)
 
-        # Parse payload to check for Rebirth command
         try:
-            # Check for Node Control/Rebirth = true
-            # In production, parse the protobuf properly
-            if b"Rebirth" in payload:
-                logger.info("Processing Rebirth command")
+            if self._payload_requests_rebirth(payload):
+                logger.info("Processing Node Rebirth command")
                 self.rebirth()
         except Exception as e:
             logger.error("Error handling NCMD: %s", e)
+
+    def _handle_dcmd(self, topic: str, payload: bytes) -> None:
+        """Handle Device Command (DCMD) messages."""
+        logger.info("Received DCMD on %s", topic)
+
+        try:
+            if not self._payload_requests_rebirth(payload):
+                return
+
+            parts = topic.split("/")
+            device_id = parts[4] if len(parts) >= 5 else None
+            if device_id:
+                logger.info("Processing Device Rebirth for %s", device_id)
+                self.rebirth_device(device_id)
+        except Exception as e:
+            logger.error("Error handling DCMD: %s", e)
 
     def rebirth(self) -> None:
         """Perform a rebirth sequence.
 
         Increments bdSeq and republishes NBIRTH and all DBIRTHs.
         """
-        self._bd_seq += 1
         self._seq = 0
         self._is_online = False
 
-        # Republish NBIRTH
         self.publish_nbirth()
+        self.republish_dbirths()
 
-        # Note: DBIRTHs need to be republished by the daemon
-        # which has access to the current metrics
         logger.info("Rebirth initiated, bdSeq=%d", self._bd_seq)
+
+    def rebirth_device(self, device_id: str) -> None:
+        """Rebirth a specific device by republishing its DBIRTH."""
+        metrics = self._collect_device_metrics(device_id)
+        if metrics:
+            self.publish_dbirth(device_id, metrics)
+            return
+
+        if not self._publish_cached_dbirth(device_id):
+            logger.warning("No cached metrics available for device rebirth: %s", device_id)
+
+    def publish_device_metrics(
+        self,
+        device_id: str,
+        metrics_all: list[ContextMetric],
+        metrics_changed: list[ContextMetric],
+        aas_uri: str | None = None,
+    ) -> None:
+        """Publish DBIRTH or DDATA based on device state."""
+        if not self.config.enabled:
+            return
+
+        if device_id not in self._devices:
+            self.publish_dbirth(device_id, metrics_all, aas_uri)
+            return
+
+        if metrics_changed:
+            self.publish_ddata(device_id, metrics_changed)
+
+        # Keep stored metrics updated even if nothing changed
+        if metrics_all:
+            self._store_device_metrics(device_id, metrics_all)
+
+    def republish_dbirths(self) -> None:
+        """Republish DBIRTHs for all known devices."""
+        device_ids = set(self._device_metrics.keys())
+        if self._birth_cache:
+            device_ids.update(self._birth_cache.get_all_dbirth_device_ids())
+
+        for device_id in sorted(device_ids):
+            metrics = self._collect_device_metrics(device_id)
+            if metrics:
+                self.publish_dbirth(device_id, metrics)
+                continue
+
+            self._publish_cached_dbirth(device_id)
 
     def shutdown(self) -> None:
         """Graceful shutdown - publish deaths for all devices."""

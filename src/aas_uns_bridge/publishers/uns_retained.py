@@ -2,11 +2,13 @@
 
 import json
 import logging
+import time
 from typing import Any
 
 from aas_uns_bridge.config import UnsConfig
 from aas_uns_bridge.domain.models import ContextMetric
 from aas_uns_bridge.mqtt.client import MqttClient
+from aas_uns_bridge.observability.metrics import METRICS
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +82,8 @@ class UnsRetainedPublisher:
         )
 
         self._published_count += 1
+        METRICS.uns_published_total.inc()
+        METRICS.last_publish_timestamp.set(time.time())
         logger.debug("Published UNS metric to %s", topic)
 
     def publish_batch(

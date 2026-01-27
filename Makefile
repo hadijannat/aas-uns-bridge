@@ -16,7 +16,7 @@ dev:
 # Generate protobuf bindings
 proto:
 	mkdir -p src/aas_uns_bridge/proto
-	protoc --python_out=src/aas_uns_bridge/proto proto/sparkplug_b.proto
+	protoc -I proto --python_out=src/aas_uns_bridge/proto proto/sparkplug_b.proto
 	touch src/aas_uns_bridge/proto/__init__.py
 
 # Generate test fixtures

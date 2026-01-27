@@ -3,6 +3,7 @@
 import logging
 import ssl
 import threading
+import time
 from collections.abc import Callable
 from typing import Any
 
@@ -63,6 +64,8 @@ class MqttClient:
         self._reconnect_delay = config.reconnect_delay_min
         self._subscriptions: dict[str, MessageCallback] = {}
         self._lock = threading.Lock()
+        self._reconnect_lock = threading.Lock()
+        self._reconnect_thread: threading.Thread | None = None
 
         # Set up callbacks
         self._client.on_connect = self._handle_connect
@@ -77,6 +80,12 @@ class MqttClient:
         # Configure TLS
         if config.use_tls:
             self._setup_tls()
+
+        # Configure automatic reconnect backoff
+        self._client.reconnect_delay_set(
+            min_delay=self.config.reconnect_delay_min,
+            max_delay=self.config.reconnect_delay_max,
+        )
 
     def _setup_tls(self) -> None:
         """Configure TLS/SSL for the connection."""
@@ -145,6 +154,43 @@ class MqttClient:
         if self._on_disconnect_callback:
             self._on_disconnect_callback()
 
+        if self._should_reconnect and self._disconnect_unexpected(reason_code):
+            self._start_reconnect_loop()
+
+    def _disconnect_unexpected(self, reason_code: Any) -> bool:
+        """Determine whether a disconnect should trigger reconnect."""
+        if reason_code is None:
+            return True
+        if hasattr(reason_code, "is_failure"):
+            return bool(reason_code.is_failure)
+        if hasattr(reason_code, "value"):
+            return reason_code.value != 0
+        return reason_code != 0
+
+    def _start_reconnect_loop(self) -> None:
+        """Start a background reconnect loop if not already running."""
+        with self._reconnect_lock:
+            if self._reconnect_thread and self._reconnect_thread.is_alive():
+                return
+            self._reconnect_thread = threading.Thread(
+                target=self._reconnect_loop,
+                daemon=True,
+            )
+            self._reconnect_thread.start()
+
+    def _reconnect_loop(self) -> None:
+        """Attempt reconnection with exponential backoff."""
+        delay = self._reconnect_delay
+        while self._should_reconnect and not self._connected.is_set():
+            try:
+                logger.info("Attempting MQTT reconnect...")
+                self._client.reconnect()
+                return
+            except Exception as exc:
+                logger.warning("Reconnect attempt failed: %s", exc)
+                time.sleep(delay)
+                delay = min(delay * 2, self.config.reconnect_delay_max)
+
     def _handle_message(
         self,
         client: mqtt.Client,
@@ -185,6 +231,8 @@ class MqttClient:
             MqttClientError: If connection fails within timeout.
         """
         try:
+            self._should_reconnect = True
+            self._reconnect_delay = self.config.reconnect_delay_min
             self._client.connect(
                 self.config.host,
                 self.config.port,

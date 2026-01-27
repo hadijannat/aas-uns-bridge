@@ -183,6 +183,7 @@ class PayloadBuilder:
             timestamp_ms=timestamp_ms,
             alias=alias,
             datatype=datatype,
+            is_null=value is None,
             properties=properties,
         )
 

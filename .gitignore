@@ -50,8 +50,8 @@ tests/fixtures/large_aas_5k_properties.json
 # Ruff
 .ruff_cache/
 
-# Generated protobuf
-src/aas_uns_bridge/proto/sparkplug_b_pb2.py
+# Generated protobuf (track the canonical binding, ignore legacy nested output)
+src/aas_uns_bridge/proto/proto/
 
 # Local configuration (keep examples)
 config/config.yaml
