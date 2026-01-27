@@ -73,6 +73,46 @@ class BridgeMetrics:
             "Number of Sparkplug metric aliases",
         )
 
+        # Semantic enforcement metrics
+        self.validation_errors_total = Counter(
+            "aas_bridge_validation_errors_total",
+            "Total number of validation errors",
+            ["error_type"],  # missing_semantic_id, value_out_of_range, etc.
+        )
+
+        self.validation_metrics_total = Counter(
+            "aas_bridge_validation_metrics_total",
+            "Total number of metrics validated",
+            ["result"],  # 'valid' or 'invalid'
+        )
+
+        self.drift_events_total = Counter(
+            "aas_bridge_drift_events_total",
+            "Total number of schema drift events detected",
+            ["event_type"],  # added, removed, type_changed, etc.
+        )
+
+        self.asset_lifecycle_events_total = Counter(
+            "aas_bridge_asset_lifecycle_events_total",
+            "Total number of asset lifecycle events",
+            ["state"],  # online, stale, offline
+        )
+
+        self.assets_online = Gauge(
+            "aas_bridge_assets_online",
+            "Number of assets currently online",
+        )
+
+        self.assets_stale = Gauge(
+            "aas_bridge_assets_stale",
+            "Number of assets currently stale",
+        )
+
+        self.assets_offline = Gauge(
+            "aas_bridge_assets_offline",
+            "Number of assets currently offline",
+        )
+
 
 # Global metrics instance
 METRICS = BridgeMetrics()

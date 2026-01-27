@@ -9,6 +9,8 @@ from typing import Any
 
 import paho.mqtt.client as mqtt
 from paho.mqtt.enums import CallbackAPIVersion, MQTTErrorCode
+from paho.mqtt.packettypes import PacketTypes
+from paho.mqtt.properties import Properties
 
 from aas_uns_bridge.config import MqttConfig
 
@@ -266,6 +268,7 @@ class MqttClient:
         payload: bytes | str,
         qos: int = 0,
         retain: bool = False,
+        user_properties: dict[str, str] | None = None,
     ) -> None:
         """Publish a message to a topic.
 
@@ -274,6 +277,9 @@ class MqttClient:
             payload: Message payload.
             qos: Quality of Service level (0, 1, or 2).
             retain: Whether the broker should retain the message.
+            user_properties: Optional MQTT v5 User Properties as key-value pairs.
+                These are transmitted in the MQTT header, separate from payload.
+                Keys should use a namespace prefix (e.g., 'aas:semanticId').
 
         Raises:
             MqttClientError: If not connected or publish fails.
@@ -284,12 +290,27 @@ class MqttClient:
         if isinstance(payload, str):
             payload = payload.encode("utf-8")
 
-        result = self._client.publish(topic, payload, qos=qos, retain=retain)
+        # Build MQTT v5 Properties if user_properties provided
+        properties = None
+        if user_properties:
+            properties = Properties(PacketTypes.PUBLISH)  # type: ignore[no-untyped-call]
+            for key, value in user_properties.items():
+                properties.UserProperty = (key, value)
+
+        result = self._client.publish(
+            topic, payload, qos=qos, retain=retain, properties=properties
+        )
 
         if result.rc != MQTTErrorCode.MQTT_ERR_SUCCESS:
             raise MqttClientError(f"Publish failed: {result.rc}")
 
-        logger.debug("Published to %s (qos=%d, retain=%s)", topic, qos, retain)
+        logger.debug(
+            "Published to %s (qos=%d, retain=%s, props=%d)",
+            topic,
+            qos,
+            retain,
+            len(user_properties) if user_properties else 0,
+        )
 
     def subscribe(self, topic: str, callback: MessageCallback) -> None:
         """Subscribe to a topic with a callback.

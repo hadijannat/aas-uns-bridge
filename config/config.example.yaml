@@ -57,3 +57,76 @@ observability:
 
 # Preferred language for MultiLanguageProperty values
 preferred_language: en
+
+# Semantic enforcement configuration
+# Transforms the bridge from a passive translator into a semantic enforcement layer
+semantic:
+  # Semantic QoS level:
+  #   0 = Raw pass-through (no validation/enrichment)
+  #   1 = Validated (schema validation before publish)
+  #   2 = Enriched (validated + MQTT v5 User Properties)
+  sqos_level: 0
+
+  # Include metadata in MQTT v5 User Properties (headers)
+  # Reduces payload size and enables header-based filtering on modern brokers
+  use_user_properties: false
+
+  # Keep metadata in JSON payload for compatibility with non-v5 subscribers
+  # Only relevant when use_user_properties is true
+  payload_metadata_fallback: true
+
+  # Pre-publish validation settings
+  validation:
+    enabled: false
+
+    # Require semantic IDs on elements
+    enforce_semantic_ids: true
+
+    # AAS element types that require semantic IDs
+    required_for_types:
+      - Property
+      - Range
+
+    # Reject invalid metrics (true) or warn only (false)
+    reject_invalid: false
+
+    # Value constraints keyed by semantic ID (IRDI/IRI)
+    # Example: Temperature sensor constraint
+    # value_constraints:
+    #   "0173-1#02-AAO677#002":
+    #     min: -40
+    #     max: 120
+    #     unit: "degC"
+    #   "0173-1#02-AAH880#002":
+    #     pattern: "^[A-Z]{2}[0-9]{6}$"  # Serial number format
+    value_constraints: {}
+
+  # Schema drift detection
+  drift:
+    enabled: false
+
+    # Detect new metrics added to assets
+    track_additions: true
+
+    # Detect metrics removed from assets
+    track_removals: true
+
+    # Detect changes in value_type, unit, or semantic_id
+    track_type_changes: true
+
+    # Topic template for drift alerts ({asset_id} is replaced)
+    alert_topic_template: "UNS/Sys/DriftAlerts/{asset_id}"
+
+  # Asset lifecycle tracking
+  lifecycle:
+    enabled: false
+
+    # Time (seconds) after which an asset without data is considered stale
+    stale_threshold_seconds: 300
+
+    # Clear retained messages when asset goes offline
+    # WARNING: This permanently removes the asset's last known state
+    clear_retained_on_offline: false
+
+    # Publish lifecycle events to UNS/Sys/Lifecycle/{asset_id}
+    publish_lifecycle_events: true

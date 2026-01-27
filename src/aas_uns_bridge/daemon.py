@@ -25,8 +25,11 @@ from aas_uns_bridge.observability.metrics import METRICS, MetricsServer
 from aas_uns_bridge.publishers.sparkplug import SparkplugPublisher
 from aas_uns_bridge.publishers.uns_retained import UnsRetainedPublisher
 from aas_uns_bridge.state.alias_db import AliasDB
+from aas_uns_bridge.state.asset_lifecycle import AssetLifecycleTracker
 from aas_uns_bridge.state.birth_cache import BirthCache
+from aas_uns_bridge.state.drift_detector import DriftDetector
 from aas_uns_bridge.state.last_published import LastPublishedHashes
+from aas_uns_bridge.validation import SemanticValidator
 
 logger = logging.getLogger(__name__)
 
@@ -130,6 +133,29 @@ class BridgeDaemon:
             state_dir / "hashes.db" if config.state.deduplicate_publishes else None
         )
 
+        # Semantic enforcement components
+        self.validator: SemanticValidator | None = None
+        self.drift_detector: DriftDetector | None = None
+        self.lifecycle_tracker: AssetLifecycleTracker | None = None
+
+        if config.semantic.validation.enabled or config.semantic.sqos_level >= 1:
+            self.validator = SemanticValidator(config.semantic.validation)
+            logger.info("Semantic validation enabled (sQoS level %d)", config.semantic.sqos_level)
+
+        if config.semantic.drift.enabled:
+            self.drift_detector = DriftDetector(
+                state_dir / "drift.db",
+                config.semantic.drift,
+            )
+            logger.info("Schema drift detection enabled")
+
+        if config.semantic.lifecycle.enabled:
+            self.lifecycle_tracker = AssetLifecycleTracker(
+                state_dir / "lifecycle.db",
+                config.semantic.lifecycle,
+            )
+            logger.info("Asset lifecycle tracking enabled")
+
         # MQTT client
         self.mqtt_client = MqttClient(
             config.mqtt,
@@ -138,7 +164,9 @@ class BridgeDaemon:
         )
 
         # Publishers
-        self.uns_publisher = UnsRetainedPublisher(self.mqtt_client, config.uns)
+        self.uns_publisher = UnsRetainedPublisher(
+            self.mqtt_client, config.uns, config.semantic
+        )
         self.sparkplug_publisher = SparkplugPublisher(
             self.mqtt_client,
             config.sparkplug,
@@ -251,12 +279,18 @@ class BridgeDaemon:
     def _process_object_store(self, object_store: Any, source: str) -> None:
         """Process an AAS object store.
 
+        Applies semantic enforcement based on configuration:
+        - Validation (sQoS level >= 1): Validates metrics before publishing
+        - Drift detection: Detects structural changes in metric schemas
+        - Lifecycle tracking: Tracks asset online/offline states
+
         Args:
             object_store: BaSyx ObjectStore with AAS content.
             source: Source identifier (file path or URL).
         """
         device_metrics_all: dict[str, list[ContextMetric]] = defaultdict(list)
         device_metrics_changed: dict[str, list[ContextMetric]] = defaultdict(list)
+        processed_assets: set[str] = set()  # Track for lifecycle updates
 
         for submodel, global_asset_id in iter_submodels(object_store):
             if not submodel.id_short:
@@ -279,6 +313,28 @@ class BridgeDaemon:
                 len(metrics),
             )
 
+            # Semantic validation (sQoS level 1+)
+            if self.validator:
+                result = self.validator.validate_batch(metrics)
+                self._record_validation_metrics(result)
+
+                if result.invalid_count > 0:
+                    logger.warning(
+                        "Validation found %d errors in %s",
+                        result.total_errors,
+                        submodel.id_short,
+                    )
+
+                # Filter to valid metrics only if reject_invalid is enabled
+                if self.config.semantic.validation.reject_invalid:
+                    metrics = result.valid_metrics
+                    if not metrics:
+                        continue
+
+            # Schema drift detection
+            if self.drift_detector and global_asset_id:
+                self._check_and_handle_drift(global_asset_id, metrics)
+
             # Build topics for UNS
             topic_metrics = self.mapper.build_topics_for_submodel(
                 metrics,
@@ -293,6 +349,10 @@ class BridgeDaemon:
             # Publish to UNS retained topics (changed only)
             if self.config.uns.enabled and changed_topic_metrics:
                 self.uns_publisher.publish_batch(changed_topic_metrics, source)
+
+            # Track asset for lifecycle
+            if global_asset_id:
+                processed_assets.add(global_asset_id)
 
             # Accumulate Sparkplug metrics
             if self.config.sparkplug.enabled and global_asset_id:
@@ -309,6 +369,10 @@ class BridgeDaemon:
             if self.config.state.deduplicate_publishes and changed_topic_metrics:
                 self.last_published.update_batch(changed_topic_metrics)
                 METRICS.tracked_topics.set(self.last_published.count)
+
+        # Update lifecycle tracking for processed assets
+        if self.lifecycle_tracker:
+            self._update_lifecycle_for_assets(processed_assets)
 
         # Publish Sparkplug after gathering per-device metrics
         if self.config.sparkplug.enabled:
@@ -335,6 +399,119 @@ class BridgeDaemon:
         except Exception as e:
             logger.error("Repository poll failed: %s", e)
             METRICS.errors_total.labels(error_type="repository").inc()
+
+    def _record_validation_metrics(self, result: Any) -> None:
+        """Record validation results to Prometheus metrics.
+
+        Args:
+            result: BatchValidationResult from semantic validator.
+        """
+        for vr in result.results:
+            if vr.is_valid:
+                METRICS.validation_metrics_total.labels(result="valid").inc()
+            else:
+                METRICS.validation_metrics_total.labels(result="invalid").inc()
+                for error in vr.errors:
+                    METRICS.validation_errors_total.labels(
+                        error_type=error.error_type.value
+                    ).inc()
+
+    def _check_and_handle_drift(
+        self, asset_id: str, metrics: list[ContextMetric]
+    ) -> None:
+        """Check for schema drift and publish alerts if detected.
+
+        Args:
+            asset_id: The asset identifier.
+            metrics: Current metrics for the asset.
+        """
+        if not self.drift_detector:
+            return
+
+        result = self.drift_detector.detect_drift(asset_id, metrics)
+
+        if result.has_drift:
+            logger.info(
+                "Drift detected for %s: %d additions, %d removals, %d changes",
+                asset_id,
+                len(result.additions),
+                len(result.removals),
+                len(result.changes),
+            )
+
+            # Record metrics and publish alerts
+            for event in result.events:
+                METRICS.drift_events_total.labels(
+                    event_type=event.event_type.value
+                ).inc()
+
+                # Publish alert to UNS
+                if self.mqtt_client.is_connected():
+                    topic = self.drift_detector.build_alert_topic(asset_id)
+                    payload = self.drift_detector.build_alert_payload(event)
+                    try:
+                        self.mqtt_client.publish(topic, payload, qos=1, retain=False)
+                    except Exception as e:
+                        logger.error("Failed to publish drift alert: %s", e)
+
+        # Update stored fingerprints after processing
+        self.drift_detector.update_fingerprints(asset_id, metrics)
+
+    def _update_lifecycle_for_assets(self, asset_ids: set[str]) -> None:
+        """Update lifecycle tracking for processed assets.
+
+        Args:
+            asset_ids: Set of asset IDs that were processed.
+        """
+        if not self.lifecycle_tracker:
+            return
+
+        for asset_id in asset_ids:
+            event = self.lifecycle_tracker.mark_online(asset_id)
+            if event:
+                METRICS.asset_lifecycle_events_total.labels(
+                    state=event.new_state.value
+                ).inc()
+
+                # Publish lifecycle event if configured
+                if self.config.semantic.lifecycle.publish_lifecycle_events:
+                    topic = self.lifecycle_tracker.build_lifecycle_topic(asset_id)
+                    payload = self.lifecycle_tracker.build_event_payload(event)
+                    try:
+                        self.mqtt_client.publish(topic, payload, qos=1, retain=False)
+                    except Exception as e:
+                        logger.error("Failed to publish lifecycle event: %s", e)
+
+        # Update gauges
+        METRICS.assets_online.set(self.lifecycle_tracker.online_count)
+        METRICS.assets_stale.set(self.lifecycle_tracker.stale_count)
+        METRICS.assets_offline.set(self.lifecycle_tracker.offline_count)
+
+    def _check_stale_assets(self) -> None:
+        """Check for stale assets and update their state."""
+        if not self.lifecycle_tracker:
+            return
+
+        events = self.lifecycle_tracker.check_stale_assets()
+        for event in events:
+            METRICS.asset_lifecycle_events_total.labels(
+                state=event.new_state.value
+            ).inc()
+
+            # Publish lifecycle event if configured
+            if self.config.semantic.lifecycle.publish_lifecycle_events:
+                topic = self.lifecycle_tracker.build_lifecycle_topic(event.asset_id)
+                payload = self.lifecycle_tracker.build_event_payload(event)
+                try:
+                    self.mqtt_client.publish(topic, payload, qos=1, retain=False)
+                except Exception as e:
+                    logger.error("Failed to publish stale event: %s", e)
+
+        # Update gauges
+        if events:
+            METRICS.assets_online.set(self.lifecycle_tracker.online_count)
+            METRICS.assets_stale.set(self.lifecycle_tracker.stale_count)
+            METRICS.assets_offline.set(self.lifecycle_tracker.offline_count)
 
     def _scan_existing_files(self) -> None:
         """Scan and process existing files in the watch directory."""
@@ -386,14 +563,26 @@ class BridgeDaemon:
             else 60.0
         )
 
+        # Use shorter interval if lifecycle tracking needs frequent checks
+        if self.lifecycle_tracker:
+            stale_check_interval = min(
+                poll_interval,
+                self.config.semantic.lifecycle.stale_threshold_seconds / 2,
+            )
+        else:
+            stale_check_interval = poll_interval
+
         try:
             while not self._shutdown.is_set():
                 # Poll repository periodically
                 if self._repo_client:
                     self._poll_repository()
 
+                # Check for stale assets
+                self._check_stale_assets()
+
                 # Wait for shutdown or next poll
-                self._shutdown.wait(poll_interval)
+                self._shutdown.wait(stale_check_interval)
 
         except KeyboardInterrupt:
             logger.info("Received interrupt signal")

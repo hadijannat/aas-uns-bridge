@@ -8,6 +8,104 @@ from pydantic import BaseModel, Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+class ValueConstraint(BaseModel):
+    """Constraint definition for a specific semantic ID."""
+
+    min: float | None = None
+    """Minimum allowed value (inclusive)."""
+
+    max: float | None = None
+    """Maximum allowed value (inclusive)."""
+
+    unit: str | None = None
+    """Expected unit (UCUM code)."""
+
+    pattern: str | None = None
+    """Regex pattern for string values."""
+
+
+class ValidationConfig(BaseModel):
+    """Semantic validation configuration."""
+
+    enabled: bool = False
+    """Enable pre-publish validation."""
+
+    enforce_semantic_ids: bool = True
+    """Require semantic IDs on elements."""
+
+    required_for_types: list[str] = Field(default_factory=lambda: ["Property", "Range"])
+    """AAS element types that require semantic IDs."""
+
+    reject_invalid: bool = False
+    """Reject invalid metrics (True) or warn only (False)."""
+
+    value_constraints: dict[str, ValueConstraint] = Field(default_factory=dict)
+    """Constraints keyed by semantic ID (IRDI/IRI)."""
+
+
+class DriftConfig(BaseModel):
+    """Schema drift detection configuration."""
+
+    enabled: bool = False
+    """Enable drift detection."""
+
+    track_additions: bool = True
+    """Detect new metrics."""
+
+    track_removals: bool = True
+    """Detect removed metrics."""
+
+    track_type_changes: bool = True
+    """Detect value_type/unit/semantic_id changes."""
+
+    alert_topic_template: str = "UNS/Sys/DriftAlerts/{asset_id}"
+    """Topic template for drift alerts. {asset_id} is replaced with sanitized asset ID."""
+
+
+class LifecycleConfig(BaseModel):
+    """Asset lifecycle tracking configuration."""
+
+    enabled: bool = False
+    """Enable lifecycle tracking."""
+
+    stale_threshold_seconds: int = 300
+    """Time after which an asset is considered stale."""
+
+    clear_retained_on_offline: bool = False
+    """Clear retained messages when asset goes offline."""
+
+    publish_lifecycle_events: bool = True
+    """Publish lifecycle events to UNS/Sys/Lifecycle/{asset_id}."""
+
+
+class SemanticConfig(BaseModel):
+    """Semantic enforcement configuration.
+
+    Controls semantic QoS (sQoS) levels:
+    - Level 0: Raw pass-through (no validation/enrichment)
+    - Level 1: Validated (schema validation before publish)
+    - Level 2: Enriched (validated + MQTT v5 User Properties)
+    """
+
+    sqos_level: Literal[0, 1, 2] = 0
+    """Semantic QoS level (0=raw, 1=validated, 2=enriched)."""
+
+    use_user_properties: bool = False
+    """Include metadata in MQTT v5 User Properties (headers)."""
+
+    payload_metadata_fallback: bool = True
+    """Keep metadata in JSON payload for non-v5 subscribers."""
+
+    validation: ValidationConfig = Field(default_factory=ValidationConfig)
+    """Validation settings."""
+
+    drift: DriftConfig = Field(default_factory=DriftConfig)
+    """Drift detection settings."""
+
+    lifecycle: LifecycleConfig = Field(default_factory=LifecycleConfig)
+    """Lifecycle tracking settings."""
+
+
 class MqttConfig(BaseModel):
     """MQTT broker connection configuration."""
 
@@ -91,6 +189,7 @@ class BridgeConfig(BaseModel):
     repo_client: RepoClientConfig = Field(default_factory=RepoClientConfig)
     state: StateConfig = Field(default_factory=StateConfig)
     observability: ObservabilityConfig = Field(default_factory=ObservabilityConfig)
+    semantic: SemanticConfig = Field(default_factory=SemanticConfig)
     preferred_language: str = "en"
 
     @classmethod
