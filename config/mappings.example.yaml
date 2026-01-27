@@ -1,0 +1,53 @@
+# ISA-95 Hierarchy Mappings
+# Maps AAS globalAssetId to ISA-95 equipment hierarchy for UNS topic construction.
+#
+# Topic structure: {enterprise}/{site}/{area}/{line}/{asset}/context/{submodel}/{element_path}
+#
+# Copy this file to mappings.yaml and adjust for your assets.
+
+# Default mapping applied when no specific match is found
+default:
+  enterprise: DefaultEnterprise
+  site: DefaultSite
+  area: DefaultArea
+  line: DefaultLine
+
+# Specific asset mappings by globalAssetId (IRI or IRDI)
+assets:
+  # Example: Robot arm in packaging line
+  "https://example.com/aas/robot-arm-001":
+    enterprise: AcmeCorp
+    site: PlantA
+    area: Packaging
+    line: Line1
+    asset: RobotArm001
+
+  # Example: Temperature sensor
+  "https://example.com/aas/temp-sensor-42":
+    enterprise: AcmeCorp
+    site: PlantA
+    area: Assembly
+    line: Line2
+    asset: TempSensor42
+
+  # Example: Using IRDI-style identifier
+  "0173-1#01-AKG123#001":
+    enterprise: AcmeCorp
+    site: PlantB
+    area: Machining
+    line: CNC-Line
+    asset: MillingMachine01
+
+# Patterns for bulk matching (glob-style)
+# Evaluated in order; first match wins
+patterns:
+  - pattern: "https://example.com/aas/robot-*"
+    enterprise: AcmeCorp
+    site: PlantA
+    area: Robotics
+    line: Assembly
+
+  - pattern: "https://example.com/aas/sensor-*"
+    enterprise: AcmeCorp
+    site: PlantA
+    area: Sensors

@@ -1,0 +1,59 @@
+# AAS-UNS Bridge Configuration
+# Copy this file to config.yaml and adjust values as needed.
+
+mqtt:
+  host: localhost
+  port: 1883
+  client_id: aas-uns-bridge
+  # username: bridge_user
+  # password: secret
+  use_tls: false
+  # ca_cert: /path/to/ca.crt
+  # client_cert: /path/to/client.crt
+  # client_key: /path/to/client.key
+  keepalive: 60
+  reconnect_delay_min: 1.0
+  reconnect_delay_max: 120.0
+
+uns:
+  enabled: true
+  root_topic: ""  # Leave empty for no prefix, or set to e.g. "uns"
+  qos: 1
+  retain: true
+
+sparkplug:
+  enabled: true
+  group_id: AAS
+  edge_node_id: Bridge
+  device_prefix: ""
+  qos: 0
+
+file_watcher:
+  enabled: true
+  watch_dir: ./watch
+  patterns:
+    - "*.aasx"
+    - "*.json"
+  recursive: true
+  debounce_seconds: 2.0
+
+repo_client:
+  enabled: false
+  base_url: http://localhost:8080
+  poll_interval_seconds: 60.0
+  timeout_seconds: 30.0
+  # auth_token: your-api-token
+
+state:
+  db_path: ./state/bridge.db
+  cache_births: true
+  deduplicate_publishes: true
+
+observability:
+  log_level: INFO
+  log_format: console  # or "json" for production
+  metrics_port: 9090
+  health_port: 8080
+
+# Preferred language for MultiLanguageProperty values
+preferred_language: en

@@ -1,0 +1,79 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# MyPy
+.mypy_cache/
+
+# Ruff
+.ruff_cache/
+
+# Generated protobuf
+src/aas_uns_bridge/proto/sparkplug_b_pb2.py
+
+# Local configuration (keep examples)
+config/config.yaml
+config/mappings.yaml
+!config/config.example.yaml
+!config/mappings.example.yaml
+
+# State files
+state/
+*.db
+
+# Watch directory contents
+watch/*.aasx
+watch/*.json
+
+# Logs
+*.log
+logs/
+
+# Docker volumes
+docker/config/
+docker/watch/
+docker/mosquitto/data/
+docker/mosquitto/log/
+
+# OS files
+.DS_Store
+Thumbs.db
+.hypothesis/

@@ -1,0 +1,55 @@
+version: "3.8"
+
+services:
+  # MQTT Broker (Eclipse Mosquitto)
+  mqtt:
+    image: eclipse-mosquitto:2
+    container_name: aas-uns-mqtt
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_logs:/mosquitto/log
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mosquitto_sub", "-t", "$$SYS/#", "-C", "1", "-i", "healthcheck", "-W", "3"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # AAS-UNS Bridge
+  bridge:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: aas-uns-bridge
+    depends_on:
+      mqtt:
+        condition: service_healthy
+    ports:
+      - "8080:8080"  # Health endpoint
+      - "9090:9090"  # Prometheus metrics
+    volumes:
+      - ./config:/app/config:ro
+      - ./watch:/app/watch:ro
+      - bridge_state:/app/state
+    environment:
+      - AAS_BRIDGE_CONFIG_FILE=/app/config/config.yaml
+      - AAS_BRIDGE_MAPPINGS_FILE=/app/config/mappings.yaml
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  mosquitto_data:
+  mosquitto_logs:
+  bridge_state:
+
+networks:
+  default:
+    name: aas-uns-network
