@@ -7,7 +7,8 @@ from typing import Any
 from aas_uns_bridge.config import SparkplugConfig
 from aas_uns_bridge.domain.models import ContextMetric
 from aas_uns_bridge.mqtt.client import MqttClient
-from aas_uns_bridge.state.alias_db import AliasDB
+
+from ..state.alias_db import AliasDB
 
 logger = logging.getLogger(__name__)
 
