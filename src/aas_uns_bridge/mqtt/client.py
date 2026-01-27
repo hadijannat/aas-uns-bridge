@@ -83,8 +83,8 @@ class MqttClient:
 
         # Configure automatic reconnect backoff
         self._client.reconnect_delay_set(
-            min_delay=self.config.reconnect_delay_min,
-            max_delay=self.config.reconnect_delay_max,
+            min_delay=int(self.config.reconnect_delay_min),
+            max_delay=int(self.config.reconnect_delay_max),
         )
 
     def _setup_tls(self) -> None:
@@ -164,8 +164,8 @@ class MqttClient:
         if hasattr(reason_code, "is_failure"):
             return bool(reason_code.is_failure)
         if hasattr(reason_code, "value"):
-            return reason_code.value != 0
-        return reason_code != 0
+            return bool(reason_code.value != 0)
+        return bool(reason_code != 0)
 
     def _start_reconnect_loop(self) -> None:
         """Start a background reconnect loop if not already running."""

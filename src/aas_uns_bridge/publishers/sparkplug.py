@@ -166,7 +166,7 @@ class SparkplugPublisher:
         try:
             from aas_uns_bridge.proto import sparkplug_b_pb2 as spb
 
-            decoded = spb.Payload()
+            decoded = spb.Payload()  # type: ignore[attr-defined]
             decoded.ParseFromString(payload)
             return decoded
         except Exception as exc:  # pragma: no cover - depends on optional proto
@@ -224,7 +224,8 @@ class SparkplugPublisher:
 
         decoded.seq = seq
         decoded.timestamp = timestamp_ms or int(time.time() * 1000)
-        return decoded.SerializeToString()
+        result: bytes = decoded.SerializeToString()
+        return result
 
     def _publish_cached_dbirth(self, device_id: str) -> bool:
         """Publish a cached DBIRTH payload if available."""
