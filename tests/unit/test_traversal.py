@@ -3,7 +3,7 @@
 from basyx.aas import model
 from basyx.aas.model.base import MultiLanguageTextType
 
-from aas_uns_bridge.aas.traversal import flatten_submodel, get_global_asset_id
+from aas_uns_bridge.aas.traversal import _ref_to_string, flatten_submodel, get_global_asset_id
 
 
 def create_property(id_short: str, value: str, value_type: type = str) -> model.Property:
@@ -289,3 +289,236 @@ class TestGetGlobalAssetId:
         asset_id = get_global_asset_id(aas)
 
         assert asset_id is None
+
+
+class TestReferenceElement:
+    """Tests for ReferenceElement flattening."""
+
+    def test_reference_element_flattening(self) -> None:
+        """Test that ReferenceElement is flattened with reference path as value."""
+        # Create a reference pointing to another element using BaSyx v2.0 API
+        ref = model.ModelReference(
+            key=(
+                model.Key(model.KeyTypes.SUBMODEL, "https://example.com/sm/target"),
+                model.Key(model.KeyTypes.PROPERTY, "TargetProperty"),
+            ),
+            type_=model.Submodel,
+        )
+        submodel = model.Submodel(
+            id_="https://example.com/sm/ref",
+            id_short="References",
+            submodel_element=[
+                model.ReferenceElement(
+                    id_short="PointsTo",
+                    value=ref,
+                ),
+            ],
+        )
+
+        metrics = flatten_submodel(submodel)
+
+        assert len(metrics) == 1
+        assert metrics[0].path == "References.PointsTo"
+        assert metrics[0].value == "https://example.com/sm/target/TargetProperty"
+        assert metrics[0].aas_type == "ReferenceElement"
+        assert metrics[0].value_type == "xs:string"
+
+    def test_reference_element_empty_reference(self) -> None:
+        """Test that ReferenceElement with no value produces None."""
+        submodel = model.Submodel(
+            id_="https://example.com/sm/ref",
+            id_short="References",
+            submodel_element=[
+                model.ReferenceElement(
+                    id_short="EmptyRef",
+                    value=None,
+                ),
+            ],
+        )
+
+        metrics = flatten_submodel(submodel)
+
+        assert len(metrics) == 1
+        assert metrics[0].value is None
+        assert metrics[0].aas_type == "ReferenceElement"
+
+
+class TestEntityElement:
+    """Tests for Entity element flattening."""
+
+    def test_entity_flattening_self_managed(self) -> None:
+        """Test that self-managed Entity emits entityType and globalAssetId."""
+        # AASd-014: SELF_MANAGED_ENTITY must have globalAssetId or specificAssetId
+        submodel = model.Submodel(
+            id_="https://example.com/sm/entity",
+            id_short="Assets",
+            submodel_element=[
+                model.Entity(
+                    id_short="LinkedAsset",
+                    entity_type=model.EntityType.SELF_MANAGED_ENTITY,
+                    global_asset_id="https://example.com/asset/linked-001",
+                ),
+            ],
+        )
+
+        metrics = flatten_submodel(submodel)
+
+        assert len(metrics) == 2
+        paths = {m.path: m for m in metrics}
+        assert "Assets.LinkedAsset.entityType" in paths
+        assert "Assets.LinkedAsset.globalAssetId" in paths
+        assert paths["Assets.LinkedAsset.entityType"].value == "SELF_MANAGED_ENTITY"
+        assert paths["Assets.LinkedAsset.globalAssetId"].value == "https://example.com/asset/linked-001"
+        assert paths["Assets.LinkedAsset.entityType"].aas_type == "Entity.entityType"
+        assert paths["Assets.LinkedAsset.globalAssetId"].aas_type == "Entity.globalAssetId"
+
+    def test_entity_with_statements(self) -> None:
+        """Test that Entity statements (nested elements) are recursively flattened."""
+        submodel = model.Submodel(
+            id_="https://example.com/sm/entity",
+            id_short="Assets",
+            submodel_element=[
+                model.Entity(
+                    id_short="Component",
+                    entity_type=model.EntityType.SELF_MANAGED_ENTITY,
+                    global_asset_id="https://example.com/asset/component-001",
+                    statement=[
+                        model.Property(
+                            id_short="SerialNumber",
+                            value_type=str,
+                            value="SN12345",
+                        ),
+                        model.Property(
+                            id_short="Status",
+                            value_type=str,
+                            value="Active",
+                        ),
+                    ],
+                ),
+            ],
+        )
+
+        metrics = flatten_submodel(submodel)
+
+        # Should have: entityType, globalAssetId, SerialNumber, Status
+        assert len(metrics) == 4
+        paths = {m.path: m.value for m in metrics}
+        assert paths["Assets.Component.entityType"] == "SELF_MANAGED_ENTITY"
+        assert paths["Assets.Component.globalAssetId"] == "https://example.com/asset/component-001"
+        assert paths["Assets.Component.SerialNumber.SerialNumber"] == "SN12345"
+        assert paths["Assets.Component.Status.Status"] == "Active"
+
+    def test_entity_co_managed_without_asset_id(self) -> None:
+        """Test CO_MANAGED_ENTITY without globalAssetId only emits entityType."""
+        # AASd-014: CO_MANAGED_ENTITY must NOT have globalAssetId or specificAssetId
+        submodel = model.Submodel(
+            id_="https://example.com/sm/entity",
+            id_short="Assets",
+            submodel_element=[
+                model.Entity(
+                    id_short="LocalEntity",
+                    entity_type=model.EntityType.CO_MANAGED_ENTITY,
+                ),
+            ],
+        )
+
+        metrics = flatten_submodel(submodel)
+
+        assert len(metrics) == 1
+        assert metrics[0].path == "Assets.LocalEntity.entityType"
+        assert metrics[0].value == "CO_MANAGED_ENTITY"
+
+
+class TestRelationshipElement:
+    """Tests for RelationshipElement flattening."""
+
+    def test_relationship_element_flattening(self) -> None:
+        """Test that RelationshipElement is flattened with first -> second format."""
+        first_ref = model.ModelReference(
+            key=(model.Key(model.KeyTypes.SUBMODEL, "https://example.com/sm/source"),),
+            type_=model.Submodel,
+        )
+        second_ref = model.ModelReference(
+            key=(model.Key(model.KeyTypes.SUBMODEL, "https://example.com/sm/target"),),
+            type_=model.Submodel,
+        )
+        submodel = model.Submodel(
+            id_="https://example.com/sm/rel",
+            id_short="Relations",
+            submodel_element=[
+                model.RelationshipElement(
+                    id_short="ComponentConnection",
+                    first=first_ref,
+                    second=second_ref,
+                ),
+            ],
+        )
+
+        metrics = flatten_submodel(submodel)
+
+        assert len(metrics) == 1
+        assert metrics[0].path == "Relations.ComponentConnection"
+        assert metrics[0].value == "https://example.com/sm/source -> https://example.com/sm/target"
+        assert metrics[0].aas_type == "RelationshipElement"
+        assert metrics[0].value_type == "xs:string"
+
+    def test_relationship_element_multikey_references(self) -> None:
+        """Test RelationshipElement with multi-key references."""
+        first_ref = model.ModelReference(
+            key=(
+                model.Key(model.KeyTypes.SUBMODEL, "SM1"),
+                model.Key(model.KeyTypes.PROPERTY, "PropA"),
+            ),
+            type_=model.Submodel,
+        )
+        second_ref = model.ModelReference(
+            key=(
+                model.Key(model.KeyTypes.SUBMODEL, "SM2"),
+                model.Key(model.KeyTypes.PROPERTY, "PropB"),
+            ),
+            type_=model.Submodel,
+        )
+        submodel = model.Submodel(
+            id_="https://example.com/sm/rel",
+            id_short="Relations",
+            submodel_element=[
+                model.RelationshipElement(
+                    id_short="Link",
+                    first=first_ref,
+                    second=second_ref,
+                ),
+            ],
+        )
+
+        metrics = flatten_submodel(submodel)
+
+        assert len(metrics) == 1
+        assert metrics[0].value == "SM1/PropA -> SM2/PropB"
+
+
+class TestRefToString:
+    """Tests for _ref_to_string helper function."""
+
+    def test_ref_to_string_single_key(self) -> None:
+        """Test converting reference with single key."""
+        ref = model.ModelReference(
+            key=(model.Key(model.KeyTypes.SUBMODEL, "SM1"),),
+            type_=model.Submodel,
+        )
+        assert _ref_to_string(ref) == "SM1"
+
+    def test_ref_to_string_multiple_keys(self) -> None:
+        """Test converting reference with multiple keys."""
+        ref = model.ModelReference(
+            key=(
+                model.Key(model.KeyTypes.SUBMODEL, "SM1"),
+                model.Key(model.KeyTypes.SUBMODEL_ELEMENT_COLLECTION, "Collection"),
+                model.Key(model.KeyTypes.PROPERTY, "Prop"),
+            ),
+            type_=model.Submodel,
+        )
+        assert _ref_to_string(ref) == "SM1/Collection/Prop"
+
+    def test_ref_to_string_none(self) -> None:
+        """Test that None reference returns None."""
+        assert _ref_to_string(None) is None

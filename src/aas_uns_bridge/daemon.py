@@ -27,6 +27,10 @@ from aas_uns_bridge.observability.health import HealthServer, create_health_chec
 from aas_uns_bridge.observability.metrics import METRICS, MetricsServer
 from aas_uns_bridge.publishers.context_publisher import ContextPublisher
 from aas_uns_bridge.publishers.sparkplug import SparkplugPublisher
+from aas_uns_bridge.publishers.sparkplug_payload import (
+    get_protobuf_unavailable_reason,
+    is_protobuf_available,
+)
 from aas_uns_bridge.publishers.uns_retained import UnsRetainedPublisher
 from aas_uns_bridge.semantic.fidelity import FidelityCalculator
 from aas_uns_bridge.semantic.resolution_cache import SemanticResolutionCache
@@ -257,6 +261,17 @@ class BridgeDaemon:
             context_publisher=self.context_publisher,
             payload_mode=payload_mode,
         )
+
+        # Check protobuf availability for Sparkplug
+        if config.sparkplug.enabled and not is_protobuf_available():
+            reason = get_protobuf_unavailable_reason()
+            logger.warning(
+                "Sparkplug protobuf bindings unavailable, using JSON fallback. "
+                "Run 'make proto' to generate bindings for optimal performance. "
+                "Reason: %s",
+                reason or "unknown",
+            )
+
         self.sparkplug_publisher = SparkplugPublisher(
             self.mqtt_client,
             config.sparkplug,

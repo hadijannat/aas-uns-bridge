@@ -53,8 +53,8 @@ dev = [
 aas-uns-bridge = "aas_uns_bridge.cli:app"
 
 [project.urls]
-Homepage = "https://github.com/example/aas-uns-bridge"
-Repository = "https://github.com/example/aas-uns-bridge"
+Homepage = "https://github.com/hadijannat/aas-uns-bridge"
+Repository = "https://github.com/hadijannat/aas-uns-bridge"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/aas_uns_bridge"]

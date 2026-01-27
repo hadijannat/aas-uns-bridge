@@ -179,7 +179,7 @@ flowchart TB
 
 ```bash
 # Clone the repository
-git clone https://github.com/example/aas-uns-bridge.git
+git clone https://github.com/hadijannat/aas-uns-bridge.git
 cd aas-uns-bridge
 
 # Copy and edit configuration

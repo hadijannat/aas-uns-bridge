@@ -123,6 +123,13 @@ def _get_value(element: model.SubmodelElement, preferred_lang: str = "en") -> An
     return None
 
 
+def _ref_to_string(ref: model.Reference | None) -> str | None:
+    """Convert an AAS Reference to a slash-separated string."""
+    if ref is None or not ref.key:
+        return None
+    return "/".join(str(k.value) for k in ref.key)
+
+
 def _flatten_element(
     element: model.SubmodelElement,
     path_prefix: str,
@@ -226,6 +233,101 @@ def _flatten_element(
                 semantic_keys=semantic_keys,
                 submodel_semantic_id=submodel_semantic_id,
             )
+        return
+
+    # Handle ReferenceElement - extract reference target as string
+    if isinstance(element, model.ReferenceElement):
+        ref_value = None
+        if element.value and element.value.key:
+            ref_value = "/".join(str(k.value) for k in element.value.key)
+        semantic_keys = _extract_semantic_references(element)
+        semantic_id = semantic_keys[0] if semantic_keys else None
+        unit = _extract_unit(element)
+        yield ContextMetric(
+            path=current_path,
+            value=ref_value,
+            aas_type="ReferenceElement",
+            value_type="xs:string",
+            semantic_id=semantic_id,
+            unit=unit,
+            aas_source=aas_source,
+            timestamp_ms=timestamp_ms,
+            semantic_keys=semantic_keys,
+            submodel_semantic_id=submodel_semantic_id,
+        )
+        return
+
+    # Handle Entity - publish entity type, global asset ID, and recurse into statements
+    if isinstance(element, model.Entity):
+        semantic_keys = _extract_semantic_references(element)
+        semantic_id = semantic_keys[0] if semantic_keys else None
+        unit = _extract_unit(element)
+
+        # Publish entity type
+        entity_type_name = element.entity_type.name if element.entity_type else "SELF_MANAGED"
+        yield ContextMetric(
+            path=f"{current_path}.entityType",
+            value=entity_type_name,
+            aas_type="Entity.entityType",
+            value_type="xs:string",
+            semantic_id=semantic_id,
+            unit=unit,
+            aas_source=aas_source,
+            timestamp_ms=timestamp_ms,
+            semantic_keys=semantic_keys,
+            submodel_semantic_id=submodel_semantic_id,
+        )
+
+        # Publish global asset ID if present
+        if element.global_asset_id:
+            yield ContextMetric(
+                path=f"{current_path}.globalAssetId",
+                value=element.global_asset_id,
+                aas_type="Entity.globalAssetId",
+                value_type="xs:string",
+                semantic_id=semantic_id,
+                unit=unit,
+                aas_source=aas_source,
+                timestamp_ms=timestamp_ms,
+                semantic_keys=semantic_keys,
+                submodel_semantic_id=submodel_semantic_id,
+            )
+
+        # Recurse into statements (SubmodelElements)
+        if element.statement:
+            for stmt in element.statement:
+                yield from _flatten_element(
+                    stmt,
+                    f"{current_path}.{stmt.id_short or 'unnamed'}",
+                    aas_source,
+                    timestamp_ms,
+                    preferred_lang,
+                    submodel_semantic_id,
+                )
+        return
+
+    # Handle RelationshipElement - publish first/second references
+    if isinstance(element, model.RelationshipElement):
+        first_ref = _ref_to_string(element.first) if element.first else None
+        second_ref = _ref_to_string(element.second) if element.second else None
+        relationship_value = f"{first_ref or ''} -> {second_ref or ''}"
+
+        semantic_keys = _extract_semantic_references(element)
+        semantic_id = semantic_keys[0] if semantic_keys else None
+        unit = _extract_unit(element)
+
+        yield ContextMetric(
+            path=current_path,
+            value=relationship_value,
+            aas_type="RelationshipElement",
+            value_type="xs:string",
+            semantic_id=semantic_id,
+            unit=unit,
+            aas_source=aas_source,
+            timestamp_ms=timestamp_ms,
+            semantic_keys=semantic_keys,
+            submodel_semantic_id=submodel_semantic_id,
+        )
         return
 
     # Handle leaf elements (Property, MultiLanguageProperty, etc.)

@@ -5,12 +5,17 @@ AAS semantic metadata through standardized PropertySet conventions.
 
 The semantic PropertySet keys follow a namespace convention (aas:*) for
 interoperability across AAS-aware Sparkplug consumers.
+
+When protobuf bindings are unavailable, this module provides a graceful
+fallback mode. Use `is_protobuf_available()` to check availability before
+instantiating `PayloadBuilder`.
 """
 
 from __future__ import annotations
 
 import importlib
 import json
+import logging
 import time
 from typing import TYPE_CHECKING, Any, cast
 
@@ -24,13 +29,35 @@ if TYPE_CHECKING:
     from aas_uns_bridge.domain.models import ContextMetric
     from aas_uns_bridge.semantic.models import SemanticContext
 
+logger = logging.getLogger(__name__)
+
 # Import generated protobuf classes
 # These will be generated from sparkplug_b.proto
 spb: Any | None
+_protobuf_import_error: str | None = None
 try:
     spb = importlib.import_module("aas_uns_bridge.proto.sparkplug_b_pb2")
-except Exception:
+except Exception as e:
     spb = None
+    _protobuf_import_error = str(e)
+
+
+def is_protobuf_available() -> bool:
+    """Check if Sparkplug protobuf bindings are available.
+
+    Returns:
+        True if protobuf bindings can be imported, False otherwise.
+    """
+    return spb is not None
+
+
+def get_protobuf_unavailable_reason() -> str | None:
+    """Get the reason protobuf is unavailable, if any.
+
+    Returns:
+        Error message if protobuf import failed, None if available.
+    """
+    return _protobuf_import_error
 
 
 # =============================================================================
@@ -141,15 +168,28 @@ def build_semantic_properties_from_context(
 
 
 class PayloadBuilder:
-    """Builder for Sparkplug B payloads."""
+    """Builder for Sparkplug B payloads.
+
+    Raises:
+        ImportError: If protobuf bindings are not available. Check with
+            `is_protobuf_available()` before instantiation to avoid this.
+    """
 
     def __init__(self) -> None:
-        """Initialize the payload builder."""
+        """Initialize the payload builder.
+
+        Raises:
+            ImportError: If protobuf bindings are not available.
+        """
         if spb is None:
-            raise ImportError(
-                "Sparkplug protobuf not generated. Run: "
+            msg = (
+                "Sparkplug protobuf not available. Run: "
                 "protoc --python_out=src/aas_uns_bridge/proto proto/sparkplug_b.proto"
             )
+            if _protobuf_import_error:
+                msg += f" (Error: {_protobuf_import_error})"
+            logger.warning(msg)
+            raise ImportError(msg)
         self._payload = spb.Payload()
         self._payload.timestamp = int(time.time() * 1000)
 
