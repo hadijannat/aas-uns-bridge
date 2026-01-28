@@ -367,19 +367,15 @@ class BidirectionalSync:
     def _convert_mqtt_path_to_api(self, mqtt_path: str) -> str:
         """Convert MQTT path to REST API path with proper array notation.
 
-        MQTT paths use slashes for all separators including array indices.
+        MQTT paths use slashes for separators. Array indices use the format
+        idx_N (e.g., idx_0, idx_1) to distinguish from numeric idShorts.
         REST API paths use dots for object access and brackets for array indices.
 
         Examples:
             Limits/MaxTemp -> Limits.MaxTemp
-            List/0/Value -> List[0].Value
-            Settings/Items/2/Name -> Settings.Items[2].Name
-
-        Note:
-            This treats any purely numeric path segment as an array index.
-            If your AAS model has elements with numeric idShorts (e.g., "123"),
-            they will be incorrectly interpreted as array indices. Consider
-            using non-numeric idShorts or prefixing them (e.g., "elem_123").
+            List/idx_0/Value -> List[0].Value
+            Settings/Items/idx_2/Name -> Settings.Items[2].Name
+            Config/123/Name -> Config.123.Name (numeric idShort, not index)
 
         Args:
             mqtt_path: MQTT-style path with slash separators.
@@ -387,15 +383,19 @@ class BidirectionalSync:
         Returns:
             REST API-style path with dot notation and bracket array indices.
         """
+        import re
+
         parts = mqtt_path.split("/")
         result: list[str] = []
 
         for part in parts:
-            if part.isdigit():
+            # Check for array index marker: idx_N
+            idx_match = re.match(r"^idx_(\d+)$", part)
+            if idx_match:
                 # Array index - wrap in brackets, no dot before
-                result.append(f"[{part}]")
+                result.append(f"[{idx_match.group(1)}]")
             else:
-                # Object property - add dot separator if result is non-empty
+                # Object property (including numeric idShorts) - add dot separator
                 if result:
                     result.append(".")
                 result.append(part)

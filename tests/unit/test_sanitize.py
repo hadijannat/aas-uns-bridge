@@ -92,12 +92,17 @@ class TestSanitizeMetricPath:
         assert sanitize_metric_path("Submodel.Element.Property") == "Submodel/Element/Property"
 
     def test_array_index_conversion(self) -> None:
-        """Test that array indices are converted to path segments."""
-        assert sanitize_metric_path("List[0].Value") == "List/0/Value"
-        assert sanitize_metric_path("Collection.Items[5]") == "Collection/Items/5"
+        """Test that array indices use idx_N format to distinguish from numeric idShorts."""
+        assert sanitize_metric_path("List[0].Value") == "List/idx_0/Value"
+        assert sanitize_metric_path("Collection.Items[5]") == "Collection/Items/idx_5"
 
     def test_combined_sanitization(self) -> None:
         """Test that all transformations are applied."""
         path = "Technical Data.General Info[0].Manufacturer Name"
-        expected = "Technical_Data/General_Info/0/Manufacturer_Name"
+        expected = "Technical_Data/General_Info/idx_0/Manufacturer_Name"
         assert sanitize_metric_path(path) == expected
+
+    def test_numeric_idshort_preserved(self) -> None:
+        """Test that numeric idShorts are not converted to array indices."""
+        # A property named "123" should stay as "123", not become an index
+        assert sanitize_metric_path("Config.123.Name") == "Config/123/Name"

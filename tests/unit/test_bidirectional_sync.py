@@ -214,18 +214,18 @@ class TestBidirectionalSyncPathConversion:
         assert result == "Limits.MaxTemp"
 
     def test_array_index_conversion(self, sync_handler: BidirectionalSync) -> None:
-        """Test converting path with array index."""
-        result = sync_handler._convert_mqtt_path_to_api("List/0/Value")
+        """Test converting path with array index marker."""
+        result = sync_handler._convert_mqtt_path_to_api("List/idx_0/Value")
         assert result == "List[0].Value"
 
     def test_multiple_array_indices(self, sync_handler: BidirectionalSync) -> None:
         """Test converting path with multiple array indices."""
-        result = sync_handler._convert_mqtt_path_to_api("Settings/Items/2/Name")
+        result = sync_handler._convert_mqtt_path_to_api("Settings/Items/idx_2/Name")
         assert result == "Settings.Items[2].Name"
 
     def test_nested_arrays(self, sync_handler: BidirectionalSync) -> None:
         """Test converting path with nested arrays."""
-        result = sync_handler._convert_mqtt_path_to_api("Matrix/0/1/Value")
+        result = sync_handler._convert_mqtt_path_to_api("Matrix/idx_0/idx_1/Value")
         assert result == "Matrix[0][1].Value"
 
     def test_single_segment_path(self, sync_handler: BidirectionalSync) -> None:
@@ -234,9 +234,20 @@ class TestBidirectionalSyncPathConversion:
         assert result == "Temperature"
 
     def test_single_array_index(self, sync_handler: BidirectionalSync) -> None:
-        """Test converting single array index."""
-        result = sync_handler._convert_mqtt_path_to_api("0")
+        """Test converting single array index marker."""
+        result = sync_handler._convert_mqtt_path_to_api("idx_0")
         assert result == "[0]"
+
+    def test_numeric_idshort_not_treated_as_index(self, sync_handler: BidirectionalSync) -> None:
+        """Test that numeric idShorts are NOT converted to array indices."""
+        # A numeric idShort like "123" should remain as a property, not an index
+        result = sync_handler._convert_mqtt_path_to_api("Config/123/Name")
+        assert result == "Config.123.Name"
+
+    def test_numeric_segment_without_marker(self, sync_handler: BidirectionalSync) -> None:
+        """Test plain numeric segment is treated as property, not index."""
+        result = sync_handler._convert_mqtt_path_to_api("0")
+        assert result == "0"
 
 
 class TestBidirectionalSyncCommandParsing:
