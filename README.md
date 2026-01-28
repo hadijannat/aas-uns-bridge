@@ -31,6 +31,10 @@ The semantic hypervisor transforms the bridge from a passive translator into an 
 
 ## Architecture
 
+![AAS-UNS Bridge Architecture](assets/architecture.png)
+
+### Architecture Overview
+
 ```mermaid
 flowchart TB
     subgraph Entry["📥 Entry Points"]
