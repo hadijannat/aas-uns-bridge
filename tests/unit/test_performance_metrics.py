@@ -15,8 +15,7 @@ def _get_histogram_count(name: str, labels: dict[str, str] | None = None) -> flo
         if metric.name == name:
             for sample in metric.samples:
                 if sample.name == f"{name}_count" and (
-                    labels is None
-                    or all(sample.labels.get(k) == v for k, v in labels.items())
+                    labels is None or all(sample.labels.get(k) == v for k, v in labels.items())
                 ):
                     return sample.value
     return 0.0
