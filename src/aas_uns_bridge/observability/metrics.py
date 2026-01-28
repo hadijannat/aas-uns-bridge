@@ -222,6 +222,12 @@ class BridgeMetrics:
             ["db_type"],  # 'alias' or 'hash'
         )
 
+        # MQTT backpressure metrics
+        self.mqtt_publish_queue_depth = Gauge(
+            "aas_bridge_mqtt_publish_queue_depth",
+            "Current depth of MQTT publish queue (pending messages awaiting acknowledgment)",
+        )
+
 
 # Global metrics instance
 METRICS = BridgeMetrics()

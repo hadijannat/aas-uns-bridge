@@ -13,6 +13,7 @@ from paho.mqtt.packettypes import PacketTypes
 from paho.mqtt.properties import Properties
 
 from aas_uns_bridge.config import MqttConfig
+from aas_uns_bridge.observability.metrics import METRICS
 
 logger = logging.getLogger(__name__)
 
@@ -69,10 +70,15 @@ class MqttClient:
         self._reconnect_lock = threading.Lock()
         self._reconnect_thread: threading.Thread | None = None
 
+        # Backpressure tracking: count of pending messages awaiting acknowledgment
+        self._pending_publish_count = 0
+        self._pending_lock = threading.Lock()
+
         # Set up callbacks
         self._client.on_connect = self._handle_connect
         self._client.on_disconnect = self._handle_disconnect
         self._client.on_message = self._handle_message
+        self._client.on_publish = self._handle_publish_ack
 
         # Configure authentication
         if config.username:
@@ -209,6 +215,31 @@ class MqttClient:
                     except Exception as e:
                         logger.error("Error in message callback for %s: %s", message.topic, e)
 
+    def _handle_publish_ack(
+        self,
+        client: mqtt.Client,
+        userdata: Any,
+        mid: int,
+        reason_code: Any = None,
+        properties: Any = None,
+    ) -> None:
+        """Handle publish acknowledgment callback (for QoS > 0).
+
+        This is called when the broker acknowledges receipt of a published message.
+        For QoS 0, this is called immediately after the message is sent.
+        For QoS 1, this is called when PUBACK is received.
+        For QoS 2, this is called when PUBCOMP is received.
+        """
+        with self._pending_lock:
+            if self._pending_publish_count > 0:
+                self._pending_publish_count -= 1
+                METRICS.mqtt_publish_queue_depth.set(self._pending_publish_count)
+                logger.debug(
+                    "Publish ack received (mid=%d), pending=%d",
+                    mid,
+                    self._pending_publish_count,
+                )
+
     def set_lwt(self, topic: str, payload: bytes, qos: int = 0, retain: bool = False) -> None:
         """Set the Last Will and Testament message.
 
@@ -297,17 +328,27 @@ class MqttClient:
             # Paho expects UserProperty as a list of (key, value) tuples
             properties.UserProperty = list(user_properties.items())
 
+        # Increment pending count before publish for backpressure tracking
+        with self._pending_lock:
+            self._pending_publish_count += 1
+            METRICS.mqtt_publish_queue_depth.set(self._pending_publish_count)
+
         result = self._client.publish(topic, payload, qos=qos, retain=retain, properties=properties)
 
         if result.rc != MQTTErrorCode.MQTT_ERR_SUCCESS:
+            # Decrement on failure since no ack will arrive
+            with self._pending_lock:
+                self._pending_publish_count -= 1
+                METRICS.mqtt_publish_queue_depth.set(self._pending_publish_count)
             raise MqttClientError(f"Publish failed: {result.rc}")
 
         logger.debug(
-            "Published to %s (qos=%d, retain=%s, props=%d)",
+            "Published to %s (qos=%d, retain=%s, props=%d, pending=%d)",
             topic,
             qos,
             retain,
             len(user_properties) if user_properties else 0,
+            self._pending_publish_count,
         )
 
     def subscribe(self, topic: str, callback: MessageCallback) -> None:
@@ -350,3 +391,15 @@ class MqttClient:
             True if connected, False if timeout occurred.
         """
         return self._connected.wait(timeout)
+
+    def get_pending_publish_count(self) -> int:
+        """Get the number of messages pending acknowledgment.
+
+        This is useful for monitoring backpressure. A consistently high value
+        indicates the broker may be slow to respond or the publish rate is too high.
+
+        Returns:
+            Number of pending publish acknowledgments.
+        """
+        with self._pending_lock:
+            return self._pending_publish_count
