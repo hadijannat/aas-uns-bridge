@@ -131,9 +131,7 @@ class SoakTestRunner:
         self.client = MqttClient(self.mqtt_config)
 
         # Create publishers
-        self.sparkplug = SparkplugPublisher(
-            self.client, self.sparkplug_config, self.alias_db
-        )
+        self.sparkplug = SparkplugPublisher(self.client, self.sparkplug_config, self.alias_db)
         self.uns = UnsRetainedPublisher(self.client, self.uns_config)
 
     def connect(self) -> None:
@@ -281,8 +279,7 @@ class SoakTestRunner:
 
         if results.initial_memory_mb > 0:
             results.memory_growth_percent = (
-                (results.final_memory_mb - results.initial_memory_mb)
-                / results.initial_memory_mb
+                (results.final_memory_mb - results.initial_memory_mb) / results.initial_memory_mb
             ) * 100
 
         # Determine pass/fail
@@ -292,9 +289,7 @@ class SoakTestRunner:
             # - Error rate < 0.1%
             # - No unrecoverable failures
             error_rate = (
-                results.total_errors / results.total_messages
-                if results.total_messages > 0
-                else 0
+                results.total_errors / results.total_messages if results.total_messages > 0 else 0
             )
 
             if results.memory_growth_percent > 50:
@@ -337,6 +332,7 @@ class SoakTestRunner:
 
 # Fixtures
 
+
 @pytest.fixture
 def mqtt_config() -> MqttConfig:
     """MQTT configuration for soak tests."""
@@ -370,6 +366,7 @@ def uns_config() -> UnsConfig:
 
 # Test Classes
 
+
 @pytest.mark.soak
 class TestSoakQuick:
     """Quick soak tests for CI validation (1 hour)."""
@@ -392,9 +389,7 @@ class TestSoakQuick:
             output_dir=tmp_path / "soak-1h",
         )
 
-        runner = SoakTestRunner(
-            mqtt_config, sparkplug_config, uns_config, config
-        )
+        runner = SoakTestRunner(mqtt_config, sparkplug_config, uns_config, config)
 
         try:
             runner.setup()
@@ -431,9 +426,7 @@ class TestSoak24Hour:
             output_dir=tmp_path / "soak-24h",
         )
 
-        runner = SoakTestRunner(
-            mqtt_config, sparkplug_config, uns_config, config
-        )
+        runner = SoakTestRunner(mqtt_config, sparkplug_config, uns_config, config)
 
         try:
             runner.setup()
@@ -477,9 +470,7 @@ class TestSoak14Day:
             output_dir=output_dir,
         )
 
-        runner = SoakTestRunner(
-            mqtt_config, sparkplug_config, uns_config, config
-        )
+        runner = SoakTestRunner(mqtt_config, sparkplug_config, uns_config, config)
 
         try:
             runner.setup()

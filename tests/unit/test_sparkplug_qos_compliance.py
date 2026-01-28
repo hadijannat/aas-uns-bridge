@@ -123,9 +123,7 @@ class TestSparkplugQoSCompliance:
         publisher._devices.add("TestDevice")
 
         # Pre-populate device metrics to avoid DBIRTH trigger
-        publisher._device_metrics["TestDevice"] = {
-            m.path: m for m in sample_metrics
-        }
+        publisher._device_metrics["TestDevice"] = {m.path: m for m in sample_metrics}
 
         # Publish DDATA
         publisher.publish_ddata("TestDevice", sample_metrics)
