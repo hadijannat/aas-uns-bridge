@@ -1,234 +1,235 @@
 # AAS-UNS Bridge
 
-A daemonized integration service that ingests Asset Administration Shell (AAS) content and publishes it to both UNS retained topics and Sparkplug B for dual-plane discovery. Features a semantic hypervisor layer for validation, enrichment, and closed-loop control.
+[![CI](https://github.com/hadijannat/aas-uns-bridge/actions/workflows/ci.yml/badge.svg)](https://github.com/hadijannat/aas-uns-bridge/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
+[![Sparkplug 3.0](https://img.shields.io/badge/Sparkplug-3.0%20Compliant-green.svg)](https://sparkplug.eclipse.org/)
+
+A production-ready integration service that ingests Asset Administration Shell (AAS) content and publishes to dual MQTT planes: **UNS retained topics** for late-subscriber discovery and **Sparkplug B** for SCADA/historian integration.
+
+## Table of Contents
+
+- [Features](#features)
+- [Architecture](#architecture)
+- [Quick Start](#quick-start)
+- [Configuration](#configuration)
+- [Topic Structure](#topic-structure)
+- [Testing & Compliance](#testing--compliance)
+- [CLI Commands](#cli-commands)
+- [Observability](#observability)
+- [Development](#development)
+- [License](#license)
 
 ## Features
 
-### Core Features
-
-- **Dual Publication**: Publishes to both UNS retained topics and Sparkplug B simultaneously
-- **Multiple AAS Sources**: AASX file watcher and AAS Repository REST API polling
-- **ISA-95 Mapping**: Configurable hierarchy mapping for proper UNS topic structure
-- **Change Detection**: Hash-based deduplication to avoid redundant publishes
-- **Sparkplug Compliance**: Full NBIRTH/DBIRTH/NDEATH/DDEATH lifecycle support
-- **Observability**: Prometheus metrics, structured logging, health endpoints
-
-### Semantic Hypervisor
-
-The semantic hypervisor transforms the bridge from a passive translator into an active semantic enforcement layer:
+### Core Capabilities
 
 | Feature | Description |
 |---------|-------------|
-| **Semantic QoS Levels** | Three levels: sQoS 0 (raw pass-through), sQoS 1 (validated), sQoS 2 (enriched with MQTT v5 headers) |
+| **Dual-Plane Publishing** | Simultaneous publication to UNS (retained JSON) and Sparkplug B (protobuf) |
+| **AAS Ingestion** | File watcher for AASX/JSON files + REST API polling from AAS repositories |
+| **ISA-95 Mapping** | Configurable globalAssetId → ISA-95 hierarchy for proper UNS topic structure |
+| **Change Detection** | Hash-based deduplication to avoid redundant publishes |
+| **Sparkplug 3.0 Compliant** | Full lifecycle support (NBIRTH/DBIRTH/DDATA/DDEATH/NDEATH), QoS=0, retain=false |
+| **State Persistence** | SQLite-backed alias database and birth cache survive restarts |
+| **Reconnection Handling** | Automatic reconnect with rebirth sequence on broker disconnect |
+
+### Semantic Hypervisor
+
+Advanced features for semantic enforcement and monitoring:
+
+| Feature | Description |
+|---------|-------------|
+| **Semantic QoS Levels** | sQoS 0 (pass-through), sQoS 1 (validated), sQoS 2 (enriched with MQTT v5 headers) |
 | **Pre-publish Validation** | Enforce semantic IDs, value constraints (min/max/unit/pattern) |
 | **Bidirectional Sync** | Command write-back to AAS repository with allowed/denied path patterns |
 | **Pointer Mode** | ~90% payload reduction using hash references to semantic context |
-| **Resolution Cache** | Sub-millisecond semantic context resolution with LRU caching |
 | **Schema Drift Detection** | Detect metric additions, removals, and type changes |
 | **Streaming Drift** | Half-Space Trees for real-time anomaly detection |
 | **Asset Lifecycle** | Track online/stale/offline states with lifecycle events |
-| **Fidelity Metrics** | Measure semantic information preservation across the translation |
+| **Fidelity Metrics** | Measure semantic information preservation across translation |
 
 ## Architecture
 
 ![AAS-UNS Bridge Architecture](assets/architecture.png)
 
-### Architecture Overview
+### Data Flow
+
+```
+AAS Sources → Loader → Traversal → Semantic Hypervisor → ISA-95 Mapper → Publishers → MQTT Broker
+     ↓           ↓          ↓              ↓                   ↓              ↓
+  AASX/JSON   BaSyx SDK  ContextMetric  Validation      AssetIdentity    UNS + Sparkplug
+```
+
+### Component Overview
+
+```mermaid
+flowchart LR
+    subgraph Input
+        FW[File Watcher]
+        RC[Repo Client]
+    end
+
+    subgraph Processing
+        L[Loader]
+        T[Traversal]
+        H[Hypervisor]
+        M[ISA-95 Mapper]
+    end
+
+    subgraph Output
+        UP[UNS Publisher]
+        SP[Sparkplug Publisher]
+    end
+
+    subgraph Broker
+        MQTT[(MQTT Broker)]
+    end
+
+    FW --> L
+    RC --> L
+    L --> T --> H --> M
+    M --> UP --> MQTT
+    M --> SP --> MQTT
+```
+
+<details>
+<summary>View Full Architecture Diagram</summary>
 
 ```mermaid
 flowchart TB
     subgraph Entry["📥 Entry Points"]
-        FW["AASFileHandler<br/><i>daemon.py</i><br/>watchdog events"]
-        RC["AASRepoClient<br/><i>aas/repo_client.py</i><br/>REST polling"]
+        FW["AASFileHandler<br/><i>daemon.py</i>"]
+        RC["AASRepoClient<br/><i>aas/repo_client.py</i>"]
     end
 
     subgraph Ingestion["📦 Ingestion Layer"]
         L["load_aasx() / load_json()<br/><i>aas/loader.py</i>"]
         T["flatten_submodel()<br/><i>aas/traversal.py</i>"]
-        CM[("ContextMetric[]<br/><i>domain/models.py</i><br/>frozen dataclass")]
+        CM[("ContextMetric[]")]
     end
 
-    subgraph Hypervisor["🔬 Semantic Hypervisor Layer"]
-        direction TB
-        subgraph Validation["sQoS Enforcement"]
-            SV["SemanticValidator<br/><i>validation/semantic_validator.py</i>"]
-        end
-        subgraph DriftDetection["Drift Detection"]
-            DD["DriftDetector<br/><i>state/drift_detector.py</i><br/>schema fingerprints"]
-            SD["IncrementalDriftDetector<br/><i>state/streaming_drift.py</i><br/>Half-Space Trees"]
-        end
-        subgraph Tracking["Asset Tracking"]
-            LT["AssetLifecycleTracker<br/><i>state/asset_lifecycle.py</i><br/>online/stale/offline"]
-            FC["FidelityCalculator<br/><i>semantic/fidelity.py</i><br/>information-theoretic"]
-        end
-        subgraph Context["Semantic Context"]
-            SRC["SemanticResolutionCache<br/><i>semantic/resolution_cache.py</i><br/>LRU + SQLite"]
-        end
+    subgraph Hypervisor["🔬 Semantic Hypervisor"]
+        SV["SemanticValidator"]
+        DD["DriftDetector"]
+        LT["LifecycleTracker"]
     end
 
-    subgraph MappingLayer["🗺️ Mapping & Deduplication"]
-        M["ISA95Mapper<br/><i>mapping/isa95.py</i><br/>→ AssetIdentity"]
-        LPH["LastPublishedHashes<br/><i>state/last_published.py</i><br/>hash deduplication"]
+    subgraph Publishers["📤 Publishers"]
+        UP["UnsRetainedPublisher<br/>retain=true, JSON"]
+        SP["SparkplugPublisher<br/>retain=false, protobuf"]
     end
 
-    subgraph Publishers["📤 Publication Layer"]
-        subgraph UNS["UNS Publisher"]
-            UP["UnsRetainedPublisher<br/><i>publishers/uns_retained.py</i>"]
-            PM["Payload Modes:<br/>• inline (full metadata)<br/>• pointer (hash ref)<br/>• hybrid"]
-            CP["ContextPublisher<br/><i>publishers/context_publisher.py</i><br/>UNS/Sys/Context/{dict}/{hash}"]
-        end
-        subgraph Sparkplug["Sparkplug B Publisher"]
-            SP["SparkplugPublisher<br/><i>publishers/sparkplug.py</i>"]
-            SL["Lifecycle:<br/>NBIRTH → DBIRTH →<br/>NDATA/DDATA →<br/>DDEATH → NDEATH"]
-        end
+    subgraph State["💾 State"]
+        DB1[("aliases.db")]
+        DB2[("births.db")]
+        DB3[("hashes.db")]
     end
 
-    subgraph Transport["🔌 Transport Layer"]
-        MQTT["MqttClient<br/><i>mqtt/client.py</i><br/>paho v2.0 + MQTTv5"]
-        Broker[("MQTT Broker<br/>(v5)")]
-    end
-
-    subgraph Bidirectional["↔️ Bidirectional Sync"]
-        BS["BidirectionalSync<br/><i>sync/bidirectional.py</i><br/>.../cmd/{submodel}/{prop}"]
-        AAS[("AAS Repository<br/>write-back")]
-    end
-
-    subgraph State["💾 State Persistence"]
-        DB1[("aliases.db<br/>Sparkplug aliases")]
-        DB2[("births.db<br/>BIRTH cache")]
-        DB3[("hashes.db<br/>deduplication")]
-        DB4[("drift.db<br/>fingerprints")]
-        DB5[("lifecycle.db<br/>asset states")]
-        DB6[("fidelity.db<br/>history")]
-        DB7[("streaming_drift.db<br/>HST forest")]
-        DB8[("semantic_cache.db<br/>contexts")]
-    end
-
-    subgraph Observability["📊 Observability"]
-        MET["MetricsServer<br/><i>metrics.py</i><br/>Prometheus :9090"]
-        HLT["HealthServer<br/><i>health.py</i><br/>liveness/readiness :8080"]
-        LOG["setup_logging()<br/><i>logging.py</i><br/>structured JSON"]
-    end
-
-    %% Data Flow
-    FW --> L
+    FW --> L --> T --> CM
     RC --> L
-    L --> T
-    T --> CM
-
-    CM --> SV
-    CM --> DD
-    CM --> SD
-    SV --> FC
-    DD --> LT
-    SD --> SRC
-
-    SRC --> M
-    M --> LPH
-
-    LPH --> UP
-    LPH --> SP
-    UP --> PM
-    UP --> CP
-    SP --> SL
-
-    UP --> MQTT
-    SP --> MQTT
-    CP --> MQTT
-    MQTT --> Broker
-
-    Broker --> BS
-    BS --> AAS
-
-    %% State connections
-    SP -.-> DB1
-    SP -.-> DB2
-    LPH -.-> DB3
-    DD -.-> DB4
-    LT -.-> DB5
-    FC -.-> DB6
-    SD -.-> DB7
-    SRC -.-> DB8
-
-    %% Observability connections
-    UP -.-> MET
-    SP -.-> MET
-    SV -.-> MET
-    DD -.-> MET
-    LT -.-> MET
-
-    %% Styling
-    classDef entry fill:#e1f5fe,stroke:#01579b
-    classDef ingestion fill:#f3e5f5,stroke:#7b1fa2
-    classDef hypervisor fill:#fff3e0,stroke:#e65100
-    classDef mapping fill:#e8f5e9,stroke:#2e7d32
-    classDef publisher fill:#fce4ec,stroke:#c2185b
-    classDef transport fill:#e3f2fd,stroke:#1565c0
-    classDef state fill:#f5f5f5,stroke:#616161
-    classDef observability fill:#fffde7,stroke:#f9a825
-
-    class FW,RC entry
-    class L,T,CM ingestion
-    class SV,DD,SD,LT,FC,SRC hypervisor
-    class M,LPH mapping
-    class UP,PM,CP,SP,SL publisher
-    class MQTT,Broker,BS,AAS transport
-    class DB1,DB2,DB3,DB4,DB5,DB6,DB7,DB8 state
-    class MET,HLT,LOG observability
+    CM --> SV --> DD --> LT
+    LT --> UP & SP
+    SP -.-> DB1 & DB2
+    UP -.-> DB3
 ```
+
+</details>
 
 ## Quick Start
 
-### Using Docker Compose
+### Prerequisites
+
+- Python 3.11+
+- MQTT Broker (Mosquitto, EMQX, or HiveMQ)
+- AAS files (AASX or JSON format)
+
+### Option 1: Docker Compose (Recommended)
 
 ```bash
 # Clone the repository
 git clone https://github.com/hadijannat/aas-uns-bridge.git
 cd aas-uns-bridge
 
-# Copy and edit configuration
-cp config/config.example.yaml docker/config/config.yaml
-cp config/mappings.example.yaml docker/config/mappings.yaml
+# Start the full stack (bridge + Mosquitto)
+docker compose -f docker/docker-compose.mosquitto.yml up -d
 
-# Start the stack
-cd docker
-docker-compose up -d
-
-# Copy AASX files to the watch directory
+# Copy your AAS files to the watch directory
 cp /path/to/your/*.aasx watch/
 
 # View logs
-docker-compose logs -f bridge
+docker compose -f docker/docker-compose.mosquitto.yml logs -f
 ```
 
-### Using pip
+### Option 2: pip Install
 
 ```bash
 # Install the package
-pip install aas-uns-bridge
+pip install -e ".[dev]"
 
-# Copy configuration files
+# Copy and configure
 cp config/config.example.yaml config/config.yaml
 cp config/mappings.example.yaml config/mappings.yaml
 
-# Edit configuration for your environment
+# Edit for your environment
 vi config/config.yaml
 
 # Run the bridge
 aas-uns-bridge run --config config/config.yaml --mappings config/mappings.yaml
 ```
 
+### Verify It's Working
+
+```bash
+# Subscribe to all UNS topics
+mosquitto_sub -h localhost -t '#' -v
+
+# Subscribe to Sparkplug topics
+mosquitto_sub -h localhost -t 'spBv1.0/#' -v
+
+# Check health endpoint
+curl http://localhost:8080/health
+
+# Check Prometheus metrics
+curl http://localhost:9090/metrics
+```
+
 ## Configuration
 
-### Basic Configuration
+### Minimal Configuration
+
+```yaml
+mqtt:
+  host: localhost
+  port: 1883
+
+uns:
+  enabled: true
+  retain: true
+
+sparkplug:
+  enabled: true
+  group_id: AAS
+  edge_node_id: Bridge
+
+file_watcher:
+  enabled: true
+  watch_dir: ./watch
+  patterns: ["*.aasx", "*.json"]
+```
+
+### Full Configuration Reference
+
+<details>
+<summary>View complete configuration options</summary>
 
 ```yaml
 mqtt:
   host: localhost
   port: 1883
   client_id: aas-uns-bridge
-  # username: bridge_user
-  # password: secret
+  username: null
+  password: null
   use_tls: false
   keepalive: 60
   reconnect_delay_min: 1.0
@@ -236,7 +237,7 @@ mqtt:
 
 uns:
   enabled: true
-  root_topic: ""  # Optional prefix
+  root_topic: ""
   qos: 1
   retain: true
 
@@ -245,14 +246,11 @@ sparkplug:
   group_id: AAS
   edge_node_id: Bridge
   device_prefix: ""
-  qos: 0
 
 file_watcher:
   enabled: true
   watch_dir: ./watch
-  patterns:
-    - "*.aasx"
-    - "*.json"
+  patterns: ["*.aasx", "*.json"]
   recursive: true
   debounce_seconds: 2.0
 
@@ -272,118 +270,36 @@ observability:
   log_format: console  # or "json"
   metrics_port: 9090
   health_port: 8080
-```
 
-### Semantic Enforcement Configuration
-
-Control validation and semantic QoS levels:
-
-```yaml
 semantic:
-  # Semantic QoS level:
-  #   0 = Raw pass-through (no validation/enrichment)
-  #   1 = Validated (schema validation before publish)
-  #   2 = Enriched (validated + MQTT v5 User Properties)
-  sqos_level: 0
-
-  # Include metadata in MQTT v5 User Properties (headers)
-  use_user_properties: false
-
-  # Keep metadata in JSON payload for non-v5 subscribers
-  payload_metadata_fallback: true
-
-  # Pre-publish validation
+  sqos_level: 0  # 0=raw, 1=validated, 2=enriched
   validation:
     enabled: false
     enforce_semantic_ids: true
-    required_for_types:
-      - Property
-      - Range
-    reject_invalid: false
-    # Value constraints by semantic ID
-    value_constraints:
-      "0173-1#02-AAO677#002":  # Temperature
-        min: -40
-        max: 120
-        unit: "degC"
-      "0173-1#02-AAH880#002":  # Serial number
-        pattern: "^[A-Z]{2}[0-9]{6}$"
-
-  # Schema drift detection
   drift:
     enabled: false
-    track_additions: true
-    track_removals: true
-    track_type_changes: true
-    alert_topic_template: "UNS/Sys/DriftAlerts/{asset_id}"
-
-  # Asset lifecycle tracking
   lifecycle:
     enabled: false
     stale_threshold_seconds: 300
-    clear_retained_on_offline: false
-    publish_lifecycle_events: true
-```
 
-### Hypervisor Configuration
-
-Advanced features for semantic context management:
-
-```yaml
 hypervisor:
-  # Semantic resolution cache
   resolution_cache:
     enabled: false
-    max_memory_entries: 10000
-    preload_on_startup: true
-
-  # Pointer mode: ~90% payload reduction
   pointer:
     enabled: false
-    mode: inline  # "inline", "pointer", or "hybrid"
-    publish_context_topics: true
-    context_topic_prefix: "UNS/Sys/Context"
-
-  # Information-theoretic fidelity metrics
-  fidelity:
-    enabled: false
-    alert_threshold: 0.7
-    weights:
-      structural: 0.3
-      semantic: 0.5
-      entropy: 0.2
-
-  # Streaming drift detection with Half-Space Trees
-  incremental_drift:
-    enabled: false
-    window_size: 1000
-    num_trees: 25
-    severity_thresholds:
-      low: 0.3
-      medium: 0.5
-      high: 0.7
-      critical: 0.9
-
-  # Bidirectional sync: command write-back
+    mode: inline  # inline, pointer, hybrid
   bidirectional:
     enabled: false
-    aas_repository_url: http://localhost:8080
-    command_topic_suffix: /cmd
-    allowed_write_patterns:
-      - "Setpoints/*"
-      - "Configuration/*"
-    denied_write_patterns:
-      - "readonly/*"
-      - "Identification/*"
-    validate_before_write: true
-    publish_confirmations: true
 ```
 
-### Mappings Configuration
+</details>
 
-Maps AAS globalAssetId to ISA-95 hierarchy:
+### ISA-95 Mappings
+
+Map AAS globalAssetId to ISA-95 hierarchy:
 
 ```yaml
+# config/mappings.yaml
 default:
   enterprise: DefaultEnterprise
   site: DefaultSite
@@ -391,54 +307,41 @@ default:
   line: DefaultLine
 
 assets:
-  "https://example.com/aas/robot-arm-001":
+  "https://example.com/aas/robot-001":
     enterprise: AcmeCorp
     site: PlantA
-    area: Packaging
+    area: Assembly
     line: Line1
-    asset: RobotArm001
+    asset: Robot001
 
 patterns:
-  - pattern: "https://example.com/aas/robot-*"
+  - pattern: "https://example.com/aas/sensor-*"
     enterprise: AcmeCorp
     site: PlantA
-    area: Robotics
-    line: Assembly
+    area: Sensors
 ```
 
 ## Topic Structure
 
-### UNS Retained Topics
-
-Data topics for asset context:
+### UNS Topics (Retained JSON)
 
 ```
 {enterprise}/{site}/{area}/{line}/{asset}/context/{submodel}/{element_path}
 ```
 
-Example:
+**Example:**
 ```
-AcmeCorp/PlantA/Assembly/Line1/Robot001/context/TechnicalData/GeneralInfo/ManufacturerName
-```
-
-Payload (sQoS 0 - inline mode):
-```json
-{
-  "value": "Acme Robotics",
-  "timestamp": 1706369400000,
-  "semanticId": "0173-1#02-AAO677#002",
-  "unit": null,
-  "source": "aas-uns-bridge",
-  "aasUri": "/watch/robot-001.aasx"
-}
+AcmeCorp/PlantA/Assembly/Line1/Robot001/context/TechnicalData/Temperature
 ```
 
-Payload (pointer mode):
+**Payload:**
 ```json
 {
-  "value": "Acme Robotics",
+  "value": 25.5,
   "timestamp": 1706369400000,
-  "ctx": "a1b2c3d4"
+  "semanticId": "0173-1#02-AAB381#001",
+  "unit": "degC",
+  "aasSource": "/watch/robot-001.aasx"
 }
 ```
 
@@ -448,83 +351,77 @@ Payload (pointer mode):
 spBv1.0/{group_id}/NBIRTH/{edge_node_id}
 spBv1.0/{group_id}/DBIRTH/{edge_node_id}/{device_id}
 spBv1.0/{group_id}/DDATA/{edge_node_id}/{device_id}
+spBv1.0/{group_id}/DDEATH/{edge_node_id}/{device_id}
 spBv1.0/{group_id}/NDEATH/{edge_node_id}
 ```
 
-### Command Topics (Bidirectional Sync)
+**Sparkplug Compliance:**
+- All messages use `QoS=0` (per Sparkplug 3.0 spec)
+- All messages use `retain=false`
+- NDEATH configured as Last Will & Testament (LWT)
+- bdSeq increments on rebirth/reconnect
+- Sequence numbers wrap 0-255
 
-Write commands back to AAS repository:
+## Testing & Compliance
 
-```
-{enterprise}/{site}/{area}/{line}/{asset}/context/{submodel}/{property}/cmd
-```
+### Test Suites
 
-Payload:
-```json
-{
-  "value": 75.5,
-  "timestamp": 1706369400000,
-  "correlation_id": "cmd-123"
-}
-```
+| Suite | Count | Description |
+|-------|-------|-------------|
+| Unit Tests | 290+ | Core logic, models, traversal |
+| Integration Tests | 20+ | MQTT broker interaction |
+| E2E Tests | 15+ | Full pipeline validation |
+| Sparkplug Compliance | 16 | QoS=0, retain=false enforcement |
+| Soak Tests | 3 | 1h, 24h, 14-day endurance |
 
-Confirmation response (published to original topic):
-```json
-{
-  "ack": true,
-  "correlation_id": "cmd-123",
-  "timestamp": 1706369401000
-}
-```
+### Running Tests
 
-### System Topics
+```bash
+# All unit tests
+pytest tests/unit -v
 
-**Context Topics** (Pointer mode semantic dictionaries):
-```
-UNS/Sys/Context/{dictionary}/{hash}
-```
+# Integration tests (requires MQTT broker)
+pytest tests/integration -v -m integration
 
-Payload:
-```json
-{
-  "semanticId": "0173-1#02-AAO677#002",
-  "unit": "degC",
-  "source": "aas-uns-bridge",
-  "aasUri": "/watch/robot-001.aasx"
-}
+# Sparkplug QoS compliance
+pytest tests/unit/test_sparkplug_qos_compliance.py -v
+
+# E2E Sparkplug compliance
+pytest tests/e2e/test_sparkplug_e2e.py -v
+
+# Generate JUnit XML reports
+pytest tests/unit -v --junitxml=test-reports/unit-tests.xml
 ```
 
-**Drift Alerts**:
-```
-UNS/Sys/DriftAlerts/{asset_id}
+### Broker Interoperability Testing
+
+Docker Compose files are provided for testing with multiple brokers:
+
+```bash
+# Mosquitto (default)
+docker compose -f docker/docker-compose.mosquitto.yml up -d
+
+# EMQX
+docker compose -f docker/docker-compose.emqx.yml up -d
+
+# HiveMQ CE
+docker compose -f docker/docker-compose.hivemq.yml up -d
+
+# Run tests against broker
+TEST_MQTT_HOST=localhost TEST_MQTT_PORT=1883 pytest tests/integration -v
 ```
 
-Payload:
-```json
-{
-  "type": "metric_added",
-  "asset_id": "robot-001",
-  "metric_path": "TechnicalData/NewProperty",
-  "timestamp": 1706369400000,
-  "severity": "medium"
-}
-```
+### TRL Evidence
 
-**Lifecycle Events**:
-```
-UNS/Sys/Lifecycle/{asset_id}
-```
+Formal Technology Readiness Level (TRL) evidence is maintained in [`docs/trl/`](docs/trl/):
 
-Payload:
-```json
-{
-  "state": "stale",
-  "previous_state": "online",
-  "asset_id": "robot-001",
-  "timestamp": 1706369400000,
-  "stale_duration_seconds": 305
-}
-```
+| Document | Purpose |
+|----------|---------|
+| [System Requirements](docs/trl/requirements/system-requirements-spec.md) | REQ-* functional requirements |
+| [Verification Matrix](docs/trl/requirements/verification-matrix.md) | Requirement → Test mapping |
+| [Sparkplug Checklist](docs/trl/compliance/sparkplug-checklist.md) | Sparkplug 3.0 compliance |
+| [Broker Matrix](docs/trl/interoperability/broker-matrix.md) | Multi-broker test results |
+| [Soak Test Template](docs/trl/operational/soak-test-template.md) | 14-day endurance log |
 
 ## CLI Commands
 
@@ -535,7 +432,7 @@ aas-uns-bridge run [--config PATH] [--mappings PATH]
 # Validate configuration
 aas-uns-bridge validate [--config PATH]
 
-# Check status of running instance
+# Check status
 aas-uns-bridge status
 
 # Show version
@@ -556,63 +453,41 @@ aas-uns-bridge version
 
 Available at `http://localhost:9090/metrics`:
 
-**Core Metrics**:
 | Metric | Type | Description |
 |--------|------|-------------|
 | `aas_bridge_aas_loaded_total` | Counter | AAS files loaded |
-| `aas_bridge_metrics_flattened_total` | Counter | Metrics extracted |
 | `aas_bridge_uns_published_total` | Counter | UNS messages published |
 | `aas_bridge_sparkplug_births_total` | Counter | Sparkplug births sent |
-| `aas_bridge_mqtt_connected` | Gauge | Connection status |
-
-**Semantic Validation Metrics**:
-| Metric | Type | Description |
-|--------|------|-------------|
+| `aas_bridge_mqtt_connected` | Gauge | Connection status (0/1) |
+| `aas_bridge_active_devices` | Gauge | Devices with active DBIRTH |
 | `semantic_validation_passed_total` | Counter | Metrics passing validation |
-| `semantic_validation_failed_total` | Counter | Metrics failing validation |
-| `semantic_validation_warnings_total` | Counter | Validation warnings issued |
+| `streaming_drift_anomalies_total` | Counter | Anomalies detected |
 
-**Cache Metrics**:
-| Metric | Type | Description |
-|--------|------|-------------|
-| `semantic_cache_hits_total` | Counter | Cache hits |
-| `semantic_cache_misses_total` | Counter | Cache misses |
-| `semantic_cache_size` | Gauge | Current cache entries |
+### Grafana Dashboard
 
-**Drift Detection Metrics**:
-| Metric | Type | Description |
-|--------|------|-------------|
-| `streaming_drift_anomalies_total` | Counter | Anomalies detected (by severity) |
-| `streaming_drift_window_size` | Gauge | Current reference window size |
-
-**Lifecycle Metrics**:
-| Metric | Type | Description |
-|--------|------|-------------|
-| `asset_lifecycle_online` | Gauge | Assets currently online |
-| `asset_lifecycle_stale` | Gauge | Assets currently stale |
-| `asset_lifecycle_offline` | Gauge | Assets currently offline |
-| `asset_lifecycle_transitions_total` | Counter | State transitions (by type) |
-
-**Fidelity Metrics**:
-| Metric | Type | Description |
-|--------|------|-------------|
-| `fidelity_score_structural` | Gauge | Structural fidelity (0-1) |
-| `fidelity_score_semantic` | Gauge | Semantic fidelity (0-1) |
-| `fidelity_score_overall` | Gauge | Weighted overall fidelity |
+Import the dashboard from `monitoring/grafana/dashboard.json` for visualization.
 
 ## Development
 
+### Setup
+
 ```bash
-# Create virtual environment
+# Clone and setup
+git clone https://github.com/hadijannat/aas-uns-bridge.git
+cd aas-uns-bridge
 python -m venv venv
 source venv/bin/activate
 
 # Install with dev dependencies
 pip install -e ".[dev]"
 
-# Generate protobuf bindings
+# Generate protobuf bindings (optional)
 make proto
+```
 
+### Common Commands
+
+```bash
 # Run tests
 make test
 
@@ -621,8 +496,47 @@ make lint
 
 # Format code
 make format
+
+# Type checking
+make typecheck
+
+# Full CI check
+make lint && make test
+```
+
+### Project Structure
+
+```
+aas-uns-bridge/
+├── src/aas_uns_bridge/
+│   ├── aas/           # AAS loading and traversal
+│   ├── domain/        # Core models (ContextMetric, AssetIdentity)
+│   ├── mapping/       # ISA-95 mapping
+│   ├── mqtt/          # MQTT client wrapper
+│   ├── publishers/    # UNS and Sparkplug publishers
+│   ├── semantic/      # Validation, fidelity, resolution cache
+│   ├── state/         # Persistence (aliases, births, hashes)
+│   └── daemon.py      # Main entry point
+├── tests/
+│   ├── unit/          # Unit tests
+│   ├── integration/   # Integration tests
+│   ├── e2e/           # End-to-end tests
+│   └── soak/          # Endurance tests
+├── config/            # Example configurations
+├── docker/            # Docker Compose files
+├── docs/trl/          # TRL evidence pack
+└── proto/             # Sparkplug protobuf definitions
 ```
 
 ## License
 
-MIT License - see LICENSE file for details.
+MIT License - see [LICENSE](LICENSE) for details.
+
+---
+
+**Maintained by:** [hadijannat](https://github.com/hadijannat)
+
+**Related Standards:**
+- [Asset Administration Shell](https://www.plattform-i40.de/SiteGlobals/IP/Forms/Lists/aas/aas.html)
+- [Eclipse Sparkplug](https://sparkplug.eclipse.org/)
+- [ISA-95](https://www.isa.org/standards-and-publications/isa-standards/isa-standards-committees/isa95)
