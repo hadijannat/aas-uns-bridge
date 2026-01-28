@@ -8,6 +8,18 @@ The AAS-UNS Bridge exposes Prometheus metrics on a configurable port (default: 9
 
 ## Components
 
+### Prometheus Alerting Rules
+
+Production alerting rules are available in `prometheus/alerting-rules.yaml`. See [prometheus/README.md](prometheus/README.md) for configuration and customization.
+
+Alert categories include:
+- **Connection**: MQTT disconnection, high reconnect rate
+- **Performance**: Publish latency, queue depth, throughput
+- **Errors**: Error rate, write failures, validation denials
+- **Resources**: State database limits, eviction rate
+- **Drift/Fidelity**: Schema drift detection, fidelity drops
+- **Assets**: Offline/stale asset detection
+
 ### Prometheus Metrics
 
 The bridge exports metrics with the prefix `aas_bridge_`. Key metric categories include:
@@ -57,50 +69,16 @@ scrape_configs:
 
 Import `grafana/aas-bridge-dashboard.json` into your Grafana instance.
 
-### 3. Configure Alerts (Optional)
+### 3. Configure Alerting Rules
 
-Example Prometheus alerting rules:
+Add the alerting rules to your Prometheus configuration:
 
 ```yaml
-groups:
-  - name: aas-uns-bridge
-    rules:
-      - alert: BridgeMQTTDisconnected
-        expr: aas_bridge_mqtt_connected == 0
-        for: 1m
-        labels:
-          severity: critical
-        annotations:
-          summary: "AAS-UNS Bridge MQTT disconnected"
-          description: "Bridge instance {{ $labels.instance }} lost MQTT connection"
-
-      - alert: BridgeHighErrorRate
-        expr: rate(aas_bridge_errors_total[5m]) > 0.1
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "High error rate on AAS-UNS Bridge"
-          description: "Error rate is {{ $value }} errors/sec on {{ $labels.instance }}"
-
-      - alert: BridgeLowFidelity
-        expr: aas_bridge_fidelity_overall < 0.8
-        for: 10m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Low transformation fidelity"
-          description: "Fidelity score is {{ $value }} for asset {{ $labels.asset_id }}"
-
-      - alert: BridgeAssetsOffline
-        expr: aas_bridge_assets_offline > 0
-        for: 5m
-        labels:
-          severity: warning
-        annotations:
-          summary: "Assets offline"
-          description: "{{ $value }} assets are offline on {{ $labels.instance }}"
+rule_files:
+  - /path/to/monitoring/prometheus/alerting-rules.yaml
 ```
+
+See [prometheus/README.md](prometheus/README.md) for the complete set of production alerting rules covering connection, performance, errors, resources, drift, and fidelity monitoring.
 
 ## Architecture
 

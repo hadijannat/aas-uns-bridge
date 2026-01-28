@@ -1,0 +1,437 @@
+# Prometheus Alerting Rules for AAS-UNS Bridge
+# TRL 8 Production Monitoring
+#
+# Severity Levels:
+#   - critical: Immediate attention required (connection loss, high error rate)
+#   - warning: Investigate soon (high latency, approaching limits)
+#   - info: Informational (drift detected, fidelity changes)
+#
+# Usage:
+#   Add to prometheus.yml under rule_files:
+#     rule_files:
+#       - /path/to/alerting-rules.yaml
+
+groups:
+  # ============================================================================
+  # Connection Alerts
+  # ============================================================================
+  - name: aas-bridge-connection
+    interval: 15s
+    rules:
+      - alert: MQTTDisconnected
+        expr: aas_bridge_mqtt_connected == 0
+        for: 1m
+        labels:
+          severity: critical
+          component: mqtt
+        annotations:
+          summary: "MQTT connection lost"
+          description: "AAS-UNS Bridge instance {{ $labels.instance }} has been disconnected from MQTT broker for more than 1 minute. All publishing operations are halted."
+          runbook_url: "https://github.com/your-org/aas-uns-bridge/blob/main/docs/operations/runbook.md#mqtt-disconnected"
+
+      - alert: HighReconnectRate
+        expr: |
+          changes(aas_bridge_mqtt_connected[15m]) > 5
+        for: 0m
+        labels:
+          severity: warning
+          component: mqtt
+        annotations:
+          summary: "High MQTT reconnection rate"
+          description: "AAS-UNS Bridge instance {{ $labels.instance }} has reconnected to MQTT broker more than 5 times in the last 15 minutes ({{ $value }} state changes). This indicates network instability or broker issues."
+          runbook_url: "https://github.com/your-org/aas-uns-bridge/blob/main/docs/operations/runbook.md#high-reconnect-rate"
+
+      - alert: NoActiveDevices
+        expr: aas_bridge_active_devices == 0 and aas_bridge_mqtt_connected == 1
+        for: 5m
+        labels:
+          severity: warning
+          component: sparkplug
+        annotations:
+          summary: "No active Sparkplug devices"
+          description: "AAS-UNS Bridge instance {{ $labels.instance }} is connected to MQTT but has no active Sparkplug devices for more than 5 minutes."
+
+  # ============================================================================
+  # Performance Alerts
+  # ============================================================================
+  - name: aas-bridge-performance
+    interval: 30s
+    rules:
+      - alert: HighPublishLatency
+        expr: |
+          histogram_quantile(0.95, sum(rate(aas_bridge_publish_latency_seconds_bucket[5m])) by (le, instance, publisher_type)) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          component: publish
+        annotations:
+          summary: "High publish latency detected"
+          description: "95th percentile publish latency for {{ $labels.publisher_type }} on instance {{ $labels.instance }} exceeds 500ms (current: {{ $value | printf \"%.3f\" }}s). Consider checking broker load or network conditions."
+          runbook_url: "https://github.com/your-org/aas-uns-bridge/blob/main/docs/operations/runbook.md#high-publish-latency"
+
+      - alert: HighPublishQueueDepth
+        expr: aas_bridge_mqtt_publish_queue_depth > 1000
+        for: 5m
+        labels:
+          severity: warning
+          component: mqtt
+        annotations:
+          summary: "High MQTT publish queue depth"
+          description: "MQTT publish queue depth on instance {{ $labels.instance }} is {{ $value }}, exceeding 1000 pending messages for more than 5 minutes. This indicates backpressure from the broker."
+          runbook_url: "https://github.com/your-org/aas-uns-bridge/blob/main/docs/operations/runbook.md#high-queue-depth"
+
+      - alert: CriticalPublishQueueDepth
+        expr: aas_bridge_mqtt_publish_queue_depth > 5000
+        for: 1m
+        labels:
+          severity: critical
+          component: mqtt
+        annotations:
+          summary: "Critical MQTT publish queue depth"
+          description: "MQTT publish queue depth on instance {{ $labels.instance }} is {{ $value }}, exceeding 5000 pending messages. Immediate action required to prevent message loss."
+
+      - alert: LowThroughput
+        expr: |
+          rate(aas_bridge_uns_published_total[10m]) < 0.017
+          and
+          aas_bridge_mqtt_connected == 1
+          and
+          aas_bridge_tracked_topics > 0
+        for: 10m
+        labels:
+          severity: warning
+          component: publish
+        annotations:
+          summary: "Low message throughput"
+          description: "AAS-UNS Bridge instance {{ $labels.instance }} is publishing fewer than 1 message per minute ({{ $value | printf \"%.4f\" }} msg/s) despite being connected and tracking topics. Check for ingestion issues."
+
+      - alert: HighTraversalDuration
+        expr: |
+          histogram_quantile(0.95, sum(rate(aas_bridge_traversal_duration_seconds_bucket[5m])) by (le, instance)) > 1.0
+        for: 5m
+        labels:
+          severity: warning
+          component: traversal
+        annotations:
+          summary: "High AAS traversal duration"
+          description: "95th percentile traversal duration on instance {{ $labels.instance }} exceeds 1 second (current: {{ $value | printf \"%.3f\" }}s). Consider optimizing submodel structure or increasing resources."
+
+      - alert: SlowAASLoading
+        expr: |
+          histogram_quantile(0.95, sum(rate(aas_bridge_aas_load_duration_seconds_bucket[5m])) by (le, instance, source_type)) > 10.0
+        for: 5m
+        labels:
+          severity: warning
+          component: loader
+        annotations:
+          summary: "Slow AAS file loading"
+          description: "95th percentile AAS load duration for {{ $labels.source_type }} on instance {{ $labels.instance }} exceeds 10 seconds (current: {{ $value | printf \"%.1f\" }}s)."
+
+  # ============================================================================
+  # Error Alerts
+  # ============================================================================
+  - name: aas-bridge-errors
+    interval: 15s
+    rules:
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(aas_bridge_errors_total[5m])) by (instance) > 0.167
+        for: 5m
+        labels:
+          severity: critical
+          component: errors
+        annotations:
+          summary: "High error rate detected"
+          description: "AAS-UNS Bridge instance {{ $labels.instance }} is experiencing more than 10 errors per minute ({{ $value | printf \"%.2f\" }} errors/s). Check logs for root cause."
+          runbook_url: "https://github.com/your-org/aas-uns-bridge/blob/main/docs/operations/runbook.md#high-error-rate"
+
+      - alert: BidirectionalWriteFailures
+        expr: |
+          increase(aas_bridge_bidirectional_writes_total{result="failure"}[5m]) > 5
+        for: 0m
+        labels:
+          severity: warning
+          component: bidirectional
+        annotations:
+          summary: "Bidirectional write failures detected"
+          description: "AAS-UNS Bridge instance {{ $labels.instance }} has experienced {{ $value }} write-back failures in the last 5 minutes. Write operations to AAS repository may be failing."
+          runbook_url: "https://github.com/your-org/aas-uns-bridge/blob/main/docs/operations/runbook.md#write-failures"
+
+      - alert: HighWriteRetryRate
+        expr: |
+          rate(aas_bridge_aas_write_retries_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: bidirectional
+        annotations:
+          summary: "High write retry rate"
+          description: "AAS-UNS Bridge instance {{ $labels.instance }} is experiencing elevated write retry rates ({{ $value | printf \"%.2f\" }}/s). The AAS repository may be experiencing issues."
+
+      - alert: ValidationDenialSpike
+        expr: |
+          increase(aas_bridge_bidirectional_validations_total{result="denied"}[5m]) > 20
+        for: 0m
+        labels:
+          severity: warning
+          component: validation
+        annotations:
+          summary: "Validation denial spike"
+          description: "AAS-UNS Bridge instance {{ $labels.instance }} has denied {{ $value }} write validations in the last 5 minutes. This may indicate attempted unauthorized modifications or schema violations."
+          runbook_url: "https://github.com/your-org/aas-uns-bridge/blob/main/docs/operations/runbook.md#validation-denials"
+
+      - alert: HighValidationErrorRate
+        expr: |
+          rate(aas_bridge_validation_errors_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: validation
+        annotations:
+          summary: "High validation error rate"
+          description: "AAS-UNS Bridge instance {{ $labels.instance }} is experiencing {{ $value | printf \"%.2f\" }} validation errors/s. Check for schema mismatches or malformed data."
+
+      - alert: SparkplugBirthFailure
+        expr: |
+          increase(aas_bridge_errors_total{error_type="sparkplug_birth"}[5m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+          component: sparkplug
+        annotations:
+          summary: "Sparkplug birth message failure"
+          description: "AAS-UNS Bridge instance {{ $labels.instance }} failed to publish Sparkplug birth messages. SCADA systems may not receive proper device registration."
+
+  # ============================================================================
+  # Resource Alerts
+  # ============================================================================
+  - name: aas-bridge-resources
+    interval: 30s
+    rules:
+      - alert: StateDBNearLimit
+        expr: |
+          (aas_bridge_state_db_entries / aas_bridge_state_db_max_entries) > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          component: state_db
+        annotations:
+          summary: "State database approaching limit"
+          description: "State database {{ $labels.db_type }} on instance {{ $labels.instance }} is at {{ $value | printf \"%.0f\" }}% capacity. Evictions will occur soon."
+          runbook_url: "https://github.com/your-org/aas-uns-bridge/blob/main/docs/operations/runbook.md#state-db-limits"
+
+      - alert: StateDBAtLimit
+        expr: |
+          aas_bridge_state_db_entries >= aas_bridge_state_db_max_entries
+        for: 1m
+        labels:
+          severity: critical
+          component: state_db
+        annotations:
+          summary: "State database at maximum capacity"
+          description: "State database {{ $labels.db_type }} on instance {{ $labels.instance }} has reached maximum capacity. New entries will trigger evictions."
+
+      - alert: HighEvictionRate
+        expr: |
+          sum(rate(aas_bridge_state_db_evictions_total[1m])) by (instance, db_type) > 1.67
+        for: 5m
+        labels:
+          severity: warning
+          component: state_db
+        annotations:
+          summary: "High state database eviction rate"
+          description: "State database {{ $labels.db_type }} on instance {{ $labels.instance }} is evicting more than 100 entries per minute ({{ $value | printf \"%.2f\" }}/s). Consider increasing max_entries or investigating data growth."
+          runbook_url: "https://github.com/your-org/aas-uns-bridge/blob/main/docs/operations/runbook.md#high-eviction-rate"
+
+      - alert: LargeStateDatabaseSize
+        expr: |
+          aas_bridge_state_db_size_bytes > 1073741824
+        for: 5m
+        labels:
+          severity: warning
+          component: state_db
+        annotations:
+          summary: "Large state database file"
+          description: "State database {{ $labels.db_type }} on instance {{ $labels.instance }} exceeds 1GB ({{ $value | humanize1024 }}). Consider cleanup or migration."
+
+      - alert: LowSemanticCacheHitRate
+        expr: |
+          (
+            sum(rate(aas_bridge_semantic_cache_hits_total[5m])) by (instance)
+            /
+            (sum(rate(aas_bridge_semantic_cache_hits_total[5m])) by (instance) + sum(rate(aas_bridge_semantic_cache_misses_total[5m])) by (instance))
+          ) < 0.5
+        for: 15m
+        labels:
+          severity: info
+          component: cache
+        annotations:
+          summary: "Low semantic cache hit rate"
+          description: "Semantic cache hit rate on instance {{ $labels.instance }} is {{ $value | printf \"%.1f\" }}%. Cache may be undersized or workload pattern may be unfavorable for caching."
+
+  # ============================================================================
+  # Drift and Fidelity Alerts
+  # ============================================================================
+  - name: aas-bridge-drift-fidelity
+    interval: 30s
+    rules:
+      - alert: DriftDetectedHigh
+        expr: |
+          increase(aas_bridge_streaming_drift_detected_total{severity="high"}[5m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+          component: drift
+        annotations:
+          summary: "High severity drift detected"
+          description: "AAS-UNS Bridge instance {{ $labels.instance }} detected high severity {{ $labels.drift_type }} drift. This may indicate significant schema changes or data anomalies."
+          runbook_url: "https://github.com/your-org/aas-uns-bridge/blob/main/docs/operations/runbook.md#drift-detected"
+
+      - alert: DriftDetectedCritical
+        expr: |
+          increase(aas_bridge_streaming_drift_detected_total{severity="critical"}[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          component: drift
+        annotations:
+          summary: "Critical drift detected"
+          description: "AAS-UNS Bridge instance {{ $labels.instance }} detected critical {{ $labels.drift_type }} drift. Immediate investigation required."
+
+      - alert: HighDriftAnomalyScore
+        expr: aas_bridge_streaming_drift_anomaly_score > 0.8
+        for: 5m
+        labels:
+          severity: warning
+          component: drift
+        annotations:
+          summary: "High anomaly score detected"
+          description: "Streaming drift detector for asset {{ $labels.asset_id }} on instance {{ $labels.instance }} shows anomaly score of {{ $value | printf \"%.2f\" }} (threshold: 0.8)."
+
+      - alert: FidelityDrop
+        expr: aas_bridge_fidelity_overall < 0.8
+        for: 10m
+        labels:
+          severity: warning
+          component: fidelity
+        annotations:
+          summary: "Transformation fidelity below threshold"
+          description: "Fidelity score for asset {{ $labels.asset_id }} on instance {{ $labels.instance }} has dropped to {{ $value | printf \"%.2f\" }}, below the 0.8 threshold. Data transformation quality may be degraded."
+          runbook_url: "https://github.com/your-org/aas-uns-bridge/blob/main/docs/operations/runbook.md#low-fidelity"
+
+      - alert: CriticalFidelityDrop
+        expr: aas_bridge_fidelity_overall < 0.5
+        for: 5m
+        labels:
+          severity: critical
+          component: fidelity
+        annotations:
+          summary: "Critical fidelity drop"
+          description: "Fidelity score for asset {{ $labels.asset_id }} on instance {{ $labels.instance }} has dropped to {{ $value | printf \"%.2f\" }}. Significant data loss or transformation errors are occurring."
+
+      - alert: HighEntropyLoss
+        expr: aas_bridge_fidelity_entropy_loss > 0.3
+        for: 10m
+        labels:
+          severity: info
+          component: fidelity
+        annotations:
+          summary: "High information entropy loss"
+          description: "Entropy loss for asset {{ $labels.asset_id }} on instance {{ $labels.instance }} is {{ $value | printf \"%.2f\" }}, indicating significant information loss during transformation."
+
+      - alert: HighDriftEventRate
+        expr: |
+          sum(rate(aas_bridge_drift_events_total[5m])) by (instance) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          component: drift
+        annotations:
+          summary: "High schema drift event rate"
+          description: "Instance {{ $labels.instance }} is detecting {{ $value | printf \"%.2f\" }} drift events per second. This may indicate rapid schema evolution or instability."
+
+  # ============================================================================
+  # Asset Lifecycle Alerts
+  # ============================================================================
+  - name: aas-bridge-assets
+    interval: 30s
+    rules:
+      - alert: AssetsGoingOffline
+        expr: |
+          increase(aas_bridge_asset_lifecycle_events_total{state="offline"}[5m]) > 5
+        for: 0m
+        labels:
+          severity: warning
+          component: assets
+        annotations:
+          summary: "Multiple assets going offline"
+          description: "{{ $value }} assets on instance {{ $labels.instance }} have transitioned to offline state in the last 5 minutes."
+
+      - alert: HighStaleAssetCount
+        expr: aas_bridge_assets_stale > 10
+        for: 15m
+        labels:
+          severity: warning
+          component: assets
+        annotations:
+          summary: "High number of stale assets"
+          description: "Instance {{ $labels.instance }} has {{ $value }} stale assets for more than 15 minutes. These assets may need investigation or removal."
+
+      - alert: AllAssetsOffline
+        expr: |
+          aas_bridge_assets_online == 0
+          and
+          (aas_bridge_assets_stale + aas_bridge_assets_offline) > 0
+        for: 5m
+        labels:
+          severity: critical
+          component: assets
+        annotations:
+          summary: "All assets offline"
+          description: "Instance {{ $labels.instance }} has no online assets but has stale/offline assets. Check data sources and connectivity."
+
+  # ============================================================================
+  # Service Health Meta-Alerts
+  # ============================================================================
+  - name: aas-bridge-service-health
+    interval: 60s
+    rules:
+      - alert: BridgeNotPublishing
+        expr: |
+          rate(aas_bridge_uns_published_total[30m]) == 0
+          and
+          rate(aas_bridge_sparkplug_data_total[30m]) == 0
+          and
+          aas_bridge_mqtt_connected == 1
+        for: 30m
+        labels:
+          severity: critical
+          component: service
+        annotations:
+          summary: "Bridge not publishing any data"
+          description: "AAS-UNS Bridge instance {{ $labels.instance }} has not published any messages to UNS or Sparkplug in 30 minutes despite being connected. Check ingestion pipeline."
+
+      - alert: NoBirthMessagesPublished
+        expr: |
+          increase(aas_bridge_sparkplug_births_total[1h]) == 0
+          and
+          aas_bridge_mqtt_connected == 1
+          and
+          aas_bridge_active_devices == 0
+        for: 1h
+        labels:
+          severity: warning
+          component: sparkplug
+        annotations:
+          summary: "No Sparkplug birth messages published"
+          description: "Instance {{ $labels.instance }} has not published any NBIRTH or DBIRTH messages in the last hour. Sparkplug devices may not be registering properly."
+
+      - alert: MetricsEndpointDown
+        expr: up{job="aas-uns-bridge"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          component: service
+        annotations:
+          summary: "AAS-UNS Bridge metrics endpoint down"
+          description: "Prometheus cannot scrape metrics from AAS-UNS Bridge instance {{ $labels.instance }}. The service may be down or network connectivity issues exist."
