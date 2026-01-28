@@ -339,6 +339,7 @@ class UnsRetainedPublisher:
 
         payload_bytes = json.dumps(payload, ensure_ascii=False).encode("utf-8")
 
+        start_time = time.perf_counter()
         self.client.publish(
             topic=topic,
             payload=payload_bytes,
@@ -346,6 +347,8 @@ class UnsRetainedPublisher:
             retain=self.config.retain,
             user_properties=user_properties,
         )
+        duration = time.perf_counter() - start_time
+        METRICS.publish_latency_seconds.labels(publisher_type="uns").observe(duration)
 
         self._published_count += 1
         METRICS.uns_published_total.inc()

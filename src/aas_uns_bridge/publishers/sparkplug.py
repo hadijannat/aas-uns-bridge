@@ -297,7 +297,10 @@ class SparkplugPublisher:
         topic = self._build_topic("NBIRTH")
 
         # Sparkplug requires retain=false, QoS=0 for births
+        start_time = time.perf_counter()
         self.client.publish(topic, payload, qos=0, retain=False)
+        duration = time.perf_counter() - start_time
+        METRICS.publish_latency_seconds.labels(publisher_type="sparkplug").observe(duration)
 
         if self._birth_cache:
             self._birth_cache.store_nbirth(topic, payload)
@@ -362,7 +365,10 @@ class SparkplugPublisher:
         payload = self._build_payload_bytes(metric_dicts, self._next_seq(), timestamp_ms)
         topic = self._build_topic("DBIRTH", device_id)
 
+        start_time = time.perf_counter()
         self.client.publish(topic, payload, qos=0, retain=False)
+        duration = time.perf_counter() - start_time
+        METRICS.publish_latency_seconds.labels(publisher_type="sparkplug").observe(duration)
 
         self._devices.add(device_id)
         self._store_device_metrics(device_id, metrics)
@@ -419,7 +425,10 @@ class SparkplugPublisher:
         payload = self._build_payload_bytes(metric_dicts, self._next_seq(), timestamp_ms)
         topic = self._build_topic("DDATA", device_id)
 
+        start_time = time.perf_counter()
         self.client.publish(topic, payload, qos=self.config.qos, retain=False)
+        duration = time.perf_counter() - start_time
+        METRICS.publish_latency_seconds.labels(publisher_type="sparkplug").observe(duration)
         METRICS.sparkplug_data_total.inc()
         METRICS.last_publish_timestamp.set(time.time())
         logger.debug("Published DDATA to %s (%d metrics)", topic, len(metrics))
@@ -436,7 +445,10 @@ class SparkplugPublisher:
         payload = self._build_payload_bytes([], self._next_seq())
         topic = self._build_topic("DDEATH", device_id)
 
+        start_time = time.perf_counter()
         self.client.publish(topic, payload, qos=0, retain=False)
+        duration = time.perf_counter() - start_time
+        METRICS.publish_latency_seconds.labels(publisher_type="sparkplug").observe(duration)
 
         self._devices.discard(device_id)
         METRICS.active_devices.set(len(self._devices))

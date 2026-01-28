@@ -8,6 +8,7 @@ from typing import Any
 from basyx.aas import model
 
 from aas_uns_bridge.domain.models import ContextMetric
+from aas_uns_bridge.observability.metrics import METRICS
 
 logger = logging.getLogger(__name__)
 
@@ -390,6 +391,7 @@ def flatten_submodel(
     Returns:
         List of ContextMetric objects representing all leaf values.
     """
+    start_time = time.perf_counter()
     timestamp_ms = int(time.time() * 1000)
     metrics: list[ContextMetric] = []
     submodel_path = submodel.id_short or "unnamed"
@@ -408,6 +410,8 @@ def flatten_submodel(
         ):
             metrics.append(metric)
 
+    duration = time.perf_counter() - start_time
+    METRICS.traversal_duration_seconds.observe(duration)
     logger.debug("Flattened submodel %s: %d metrics", submodel.id_short, len(metrics))
     return metrics
 

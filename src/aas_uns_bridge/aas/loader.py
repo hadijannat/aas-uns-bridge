@@ -2,6 +2,7 @@
 
 import json
 import logging
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, cast
@@ -9,6 +10,8 @@ from typing import Any, cast
 from basyx.aas import model
 from basyx.aas.adapter import aasx
 from basyx.aas.adapter import json as aas_json
+
+from aas_uns_bridge.observability.metrics import METRICS
 
 logger = logging.getLogger(__name__)
 
@@ -34,11 +37,14 @@ def load_aasx(path: Path) -> model.DictObjectStore[model.Identifiable]:
     if not path.exists():
         raise AASLoadError(f"AASX file not found: {path}")
 
+    start_time = time.perf_counter()
     try:
         object_store: model.DictObjectStore[model.Identifiable] = model.DictObjectStore()
         file_store = aasx.DictSupplementaryFileContainer()  # type: ignore[no-untyped-call]
         with aasx.AASXReader(str(path)) as reader:
             reader.read_into(object_store, file_store)
+        duration = time.perf_counter() - start_time
+        METRICS.aas_load_duration_seconds.labels(source_type="file").observe(duration)
         logger.info("Loaded AASX: %s (%d objects)", path.name, len(object_store))
         return object_store
     except Exception as e:
@@ -60,6 +66,7 @@ def load_json(path: Path) -> model.DictObjectStore[model.Identifiable]:
     if not path.exists():
         raise AASLoadError(f"JSON file not found: {path}")
 
+    start_time = time.perf_counter()
     try:
         with open(path) as f:
             data = json.load(f)
@@ -84,6 +91,8 @@ def load_json(path: Path) -> model.DictObjectStore[model.Identifiable]:
         else:
             raise AASLoadError(f"Unexpected JSON structure in {path}")
 
+        duration = time.perf_counter() - start_time
+        METRICS.aas_load_duration_seconds.labels(source_type="file").observe(duration)
         logger.info("Loaded JSON: %s (%d objects)", path.name, len(object_store))
         return object_store
     except json.JSONDecodeError as e:

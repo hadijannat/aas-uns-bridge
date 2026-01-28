@@ -1,11 +1,14 @@
 """SQLite-backed alias database for Sparkplug metric aliases."""
 
 import logging
+import os
 import sqlite3
 import threading
 import time
 from collections.abc import Callable, Iterator
 from pathlib import Path
+
+from aas_uns_bridge.observability.metrics import METRICS
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +47,7 @@ class AliasDB:
 
         self._init_db()
         self._load_cache()
+        self._report_db_size()
 
     def _init_db(self) -> None:
         """Initialize the database schema."""
@@ -104,6 +108,14 @@ class AliasDB:
                     self._next_alias = alias + 1
 
         logger.info("Loaded %d metric aliases from database", len(self._cache))
+
+    def _report_db_size(self) -> None:
+        """Report the database file size to Prometheus metrics."""
+        try:
+            size = os.path.getsize(self.db_path)
+            METRICS.state_db_size_bytes.labels(db_type="alias").set(size)
+        except OSError:
+            pass
 
     def _evict_if_needed(self, conn: sqlite3.Connection) -> int:
         """Evict oldest entries if at capacity.
@@ -198,6 +210,7 @@ class AliasDB:
                 conn.commit()
 
             self._cache[metric_path] = alias
+            self._report_db_size()
             logger.debug("Assigned alias %d to %s", alias, metric_path)
             return alias
 
@@ -279,6 +292,7 @@ class AliasDB:
             self._cache.clear()
             self._next_alias = 1
 
+        self._report_db_size()
         logger.info("Cleared all metric aliases")
 
     @property

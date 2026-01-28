@@ -4,7 +4,13 @@ import threading
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 from typing import Any
 
-from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, generate_latest
+from prometheus_client import (
+    CONTENT_TYPE_LATEST,
+    Counter,
+    Gauge,
+    Histogram,
+    generate_latest,
+)
 
 
 # Metric definitions
@@ -226,6 +232,33 @@ class BridgeMetrics:
         self.mqtt_publish_queue_depth = Gauge(
             "aas_bridge_mqtt_publish_queue_depth",
             "Current depth of MQTT publish queue (pending messages awaiting acknowledgment)",
+        )
+
+        # Performance metrics for TRL 8 monitoring
+        self.publish_latency_seconds = Histogram(
+            "aas_bridge_publish_latency_seconds",
+            "Time from publish call to acknowledgment",
+            ["publisher_type"],
+            buckets=[0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5],
+        )
+
+        self.state_db_size_bytes = Gauge(
+            "aas_bridge_state_db_size_bytes",
+            "Size of state database file in bytes",
+            ["db_type"],
+        )
+
+        self.traversal_duration_seconds = Histogram(
+            "aas_bridge_traversal_duration_seconds",
+            "Duration of AAS submodel traversal",
+            buckets=[0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1.0],
+        )
+
+        self.aas_load_duration_seconds = Histogram(
+            "aas_bridge_aas_load_duration_seconds",
+            "Duration of AAS file loading",
+            ["source_type"],
+            buckets=[0.01, 0.05, 0.1, 0.5, 1.0, 5.0, 10.0],
         )
 
 

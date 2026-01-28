@@ -3,6 +3,7 @@
 import hashlib
 import json
 import logging
+import os
 import sqlite3
 import time
 from collections.abc import Callable
@@ -10,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from aas_uns_bridge.domain.models import ContextMetric
+from aas_uns_bridge.observability.metrics import METRICS
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +59,7 @@ class LastPublishedHashes:
             db_path.parent.mkdir(parents=True, exist_ok=True)
             self._init_db()
             self._load_cache()
+            self._report_db_size()
 
     def _init_db(self) -> None:
         """Initialize the database schema."""
@@ -112,6 +115,15 @@ class LastPublishedHashes:
                 self._cache[topic] = hash_value
                 self._cache_timestamps[topic] = created_at or 0
         logger.debug("Loaded %d hashes from database", len(self._cache))
+
+    def _report_db_size(self) -> None:
+        """Report the database file size to Prometheus metrics."""
+        if self._persist and self.db_path:
+            try:
+                size = os.path.getsize(self.db_path)
+                METRICS.state_db_size_bytes.labels(db_type="hash").set(size)
+            except OSError:
+                pass
 
     def _compute_hash(self, value: Any) -> str:
         """Compute SHA256 hash of a value."""
@@ -266,6 +278,7 @@ class LastPublishedHashes:
                     (topic, current_hash, now, created_at),
                 )
                 conn.commit()
+            self._report_db_size()
 
     def filter_changed(
         self,
@@ -334,6 +347,7 @@ class LastPublishedHashes:
                     ],
                 )
                 conn.commit()
+            self._report_db_size()
 
         # Check max entries if we added new entries
         if new_entries_added:
@@ -349,6 +363,7 @@ class LastPublishedHashes:
             with sqlite3.connect(self.db_path) as conn:
                 conn.execute("DELETE FROM published_hashes")
                 conn.commit()
+            self._report_db_size()
         logger.info("Cleared published hashes")
 
     def force_cleanup(self) -> int:
