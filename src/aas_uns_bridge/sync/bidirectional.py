@@ -18,7 +18,9 @@ import json
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
+
+import structlog
 
 from aas_uns_bridge.observability.metrics import METRICS
 
@@ -27,6 +29,20 @@ if TYPE_CHECKING:
     from aas_uns_bridge.mqtt.client import MqttClient
 
 logger = logging.getLogger(__name__)
+
+# Dedicated audit logger for structured compliance logging
+audit_logger: structlog.stdlib.BoundLogger = structlog.get_logger("aas_uns_bridge.audit")
+
+# Event type literals for audit logging
+AuditEvent = Literal[
+    "write_command_received",
+    "write_validated",
+    "write_executed",
+    "write_response_sent",
+]
+
+# Result type literals for audit logging
+AuditResult = Literal["success", "denied", "failed"]
 
 
 @dataclass
@@ -102,6 +118,68 @@ class BidirectionalSync:
         self._write_count = 0
         self._error_count = 0
 
+    def _audit_log(
+        self,
+        event: AuditEvent,
+        *,
+        topic: str,
+        submodel_id: str | None = None,
+        property_path: str | None = None,
+        value: Any = None,
+        result: AuditResult | None = None,
+        reason: str | None = None,
+        correlation_id: str | None = None,
+        requestor: str | None = None,
+        timestamp_ms: int | None = None,
+        redact_value: bool = False,
+    ) -> None:
+        """Create a structured audit log entry for write operations.
+
+        All audit entries are logged at INFO level to ensure they are captured
+        in production environments for compliance and debugging purposes.
+
+        Args:
+            event: The type of audit event (write_command_received, etc.).
+            topic: The MQTT topic associated with this operation.
+            submodel_id: The target submodel identifier, if applicable.
+            property_path: The property path being written, if applicable.
+            value: The value being written (will be redacted if redact_value=True).
+            result: The outcome of the operation (success, denied, failed).
+            reason: Error message or denial reason, if applicable.
+            correlation_id: Correlation ID from the command, if present.
+            requestor: Requestor identifier from the command, if present.
+            timestamp_ms: Event timestamp in milliseconds since epoch.
+            redact_value: If True, replace value with "[REDACTED]" in log.
+        """
+        if timestamp_ms is None:
+            timestamp_ms = int(time.time() * 1000)
+
+        # Build the audit entry, only including non-None fields
+        # Note: structlog uses 'event' internally for the log message,
+        # so we use 'audit_event' for our event type field
+        audit_entry: dict[str, Any] = {
+            "audit_event": event,
+            "topic": topic,
+            "timestamp_ms": timestamp_ms,
+        }
+
+        if submodel_id is not None:
+            audit_entry["submodel_id"] = submodel_id
+        if property_path is not None:
+            audit_entry["property_path"] = property_path
+        if value is not None:
+            audit_entry["value"] = "[REDACTED]" if redact_value else value
+        if result is not None:
+            audit_entry["result"] = result
+        if reason is not None:
+            audit_entry["reason"] = reason
+        if correlation_id is not None:
+            audit_entry["correlation_id"] = correlation_id
+        if requestor is not None:
+            audit_entry["requestor"] = requestor
+
+        audit_logger.info("bidirectional_write_audit", **audit_entry)
+
     def subscribe_command_topics(self, base_patterns: list[str]) -> None:
         """Subscribe to command topics for write-back.
 
@@ -148,10 +226,34 @@ class BidirectionalSync:
             if cmd is None:
                 return
 
+            # Audit: Command received
+            self._audit_log(
+                "write_command_received",
+                topic=cmd.topic,
+                submodel_id=cmd.submodel_id,
+                property_path=cmd.property_path,
+                value=cmd.value,
+                correlation_id=cmd.correlation_id,
+                requestor=cmd.requestor,
+                timestamp_ms=cmd.timestamp_ms,
+            )
+
             # Validate the command
             if self._validate:
                 validation = self._validate_write(cmd)
                 if not validation.is_valid:
+                    # Audit: Validation denied
+                    self._audit_log(
+                        "write_validated",
+                        topic=cmd.topic,
+                        submodel_id=cmd.submodel_id,
+                        property_path=cmd.property_path,
+                        value=cmd.value,
+                        result="denied",
+                        reason="; ".join(validation.errors),
+                        correlation_id=cmd.correlation_id,
+                        requestor=cmd.requestor,
+                    )
                     self._publish_rejection(cmd, validation.errors)
                     return
 
@@ -327,6 +429,18 @@ class BidirectionalSync:
                 cmd.value,
             )
 
+            # Audit: Write executed successfully
+            self._audit_log(
+                "write_executed",
+                topic=cmd.topic,
+                submodel_id=cmd.submodel_id,
+                property_path=cmd.property_path,
+                value=cmd.value,
+                result="success",
+                correlation_id=cmd.correlation_id,
+                requestor=cmd.requestor,
+            )
+
             if self._publish_confirmations:
                 self._publish_confirmation(cmd)
 
@@ -334,6 +448,20 @@ class BidirectionalSync:
             logger.error("Write failed: %s", e)
             self._error_count += 1
             METRICS.bidirectional_writes_total.labels(result="failure").inc()
+
+            # Audit: Write execution failed
+            self._audit_log(
+                "write_executed",
+                topic=cmd.topic,
+                submodel_id=cmd.submodel_id,
+                property_path=cmd.property_path,
+                value=cmd.value,
+                result="failed",
+                reason=str(e),
+                correlation_id=cmd.correlation_id,
+                requestor=cmd.requestor,
+            )
+
             if self._publish_confirmations:
                 self._publish_rejection(cmd, [str(e)])
 
@@ -344,9 +472,10 @@ class BidirectionalSync:
             cmd: The completed write command.
         """
         ack_topic = f"{cmd.topic}/ack"
+        response_timestamp = int(time.time() * 1000)
         payload: dict[str, Any] = {
             "success": True,
-            "timestamp": int(time.time() * 1000),
+            "timestamp": response_timestamp,
         }
         if cmd.correlation_id:
             payload["correlationId"] = cmd.correlation_id
@@ -359,6 +488,18 @@ class BidirectionalSync:
         )
         logger.debug("Published ack to %s", ack_topic)
 
+        # Audit: Response sent (ack)
+        self._audit_log(
+            "write_response_sent",
+            topic=ack_topic,
+            submodel_id=cmd.submodel_id,
+            property_path=cmd.property_path,
+            result="success",
+            correlation_id=cmd.correlation_id,
+            requestor=cmd.requestor,
+            timestamp_ms=response_timestamp,
+        )
+
     def _publish_rejection(self, cmd: WriteCommand, errors: list[str]) -> None:
         """Publish failure rejection to nak topic.
 
@@ -367,10 +508,11 @@ class BidirectionalSync:
             errors: List of error messages.
         """
         nak_topic = f"{cmd.topic}/nak"
+        response_timestamp = int(time.time() * 1000)
         payload: dict[str, Any] = {
             "success": False,
             "errors": errors,
-            "timestamp": int(time.time() * 1000),
+            "timestamp": response_timestamp,
         }
         if cmd.correlation_id:
             payload["correlationId"] = cmd.correlation_id
@@ -382,6 +524,19 @@ class BidirectionalSync:
             retain=False,
         )
         logger.debug("Published nak to %s", nak_topic)
+
+        # Audit: Response sent (nak)
+        self._audit_log(
+            "write_response_sent",
+            topic=nak_topic,
+            submodel_id=cmd.submodel_id,
+            property_path=cmd.property_path,
+            result="denied",
+            reason="; ".join(errors),
+            correlation_id=cmd.correlation_id,
+            requestor=cmd.requestor,
+            timestamp_ms=response_timestamp,
+        )
 
     @property
     def write_count(self) -> int:
