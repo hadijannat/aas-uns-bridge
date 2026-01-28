@@ -4,7 +4,6 @@ Tests system behavior under high load, concurrent access, and memory pressure,
 including concurrent metric processing, alias database access, and hash cache growth.
 """
 
-import tempfile
 import threading
 import time
 from pathlib import Path
@@ -239,17 +238,13 @@ class TestMemoryBounds:
             hash_tracker.update(topic, metric)
 
         # Verify count
-        assert hash_tracker.count == 10000, (
-            f"Expected 10000 entries, got {hash_tracker.count}"
-        )
+        assert hash_tracker.count == 10000, f"Expected 10000 entries, got {hash_tracker.count}"
 
         # Clear the cache
         hash_tracker.clear()
 
         # Verify count is 0 after clear
-        assert hash_tracker.count == 0, (
-            f"Expected 0 entries after clear, got {hash_tracker.count}"
-        )
+        assert hash_tracker.count == 0, f"Expected 0 entries after clear, got {hash_tracker.count}"
 
     def test_alias_db_memory_growth(
         self,
@@ -267,17 +262,13 @@ class TestMemoryBounds:
             alias_db.get_alias(metric_path, device_id="test-device")
 
         # Verify count
-        assert alias_db.count == 10000, (
-            f"Expected 10000 aliases, got {alias_db.count}"
-        )
+        assert alias_db.count == 10000, f"Expected 10000 aliases, got {alias_db.count}"
 
         # Clear all aliases
         alias_db.clear_all()
 
         # Verify count is 0 after clear
-        assert alias_db.count == 0, (
-            f"Expected 0 aliases after clear, got {alias_db.count}"
-        )
+        assert alias_db.count == 0, f"Expected 0 aliases after clear, got {alias_db.count}"
 
     def test_concurrent_hash_updates_and_clears(
         self,

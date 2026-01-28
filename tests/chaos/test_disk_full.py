@@ -7,6 +7,7 @@ BirthCache) handle disk write failures gracefully, including:
 - Cache survival during disk failures
 """
 
+import contextlib
 import sqlite3
 import tempfile
 from pathlib import Path
@@ -345,10 +346,8 @@ class TestBirthCacheDiskFailure:
 
             try:
                 # Attempt writes that will fail
-                try:
+                with contextlib.suppress(sqlite3.OperationalError, PermissionError):
                     cache.store_dbirth("device3", "topic", b"data")
-                except (sqlite3.OperationalError, PermissionError):
-                    pass
 
                 # Verify original data is intact
                 assert cache.get_nbirth() is not None
@@ -371,7 +370,9 @@ class TestBirthCacheDiskFailure:
             # Create and populate first cache instance
             cache1 = BirthCache(db_path)
             cache1.store_nbirth("spBv1.0/group/NBIRTH/node", b"nbirth_persistent")
-            cache1.store_dbirth("device1", "spBv1.0/group/DBIRTH/node/device1", b"dbirth_persistent")
+            cache1.store_dbirth(
+                "device1", "spBv1.0/group/DBIRTH/node/device1", b"dbirth_persistent"
+            )
 
             # Simulate restart by creating new cache instance
             cache2 = BirthCache(db_path)

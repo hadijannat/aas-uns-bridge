@@ -21,8 +21,8 @@ def malicious_inputs() -> dict[str, list[str]]:
             "a" * 10000,  # Very long topic
         ],
         "json_bombs": [
-            '{"a":' * 100 + '1' + '}' * 100,  # Deeply nested
-            '["' + 'a' * 10000 + '"]',  # Large string
+            '{"a":' * 100 + "1" + "}" * 100,  # Deeply nested
+            '["' + "a" * 10000 + '"]',  # Large string
         ],
         "path_traversal": [
             "../../etc/passwd",

@@ -169,7 +169,9 @@ class TestBrokerRestartRecovery:
                 None,
             )
 
-            assert not client.is_connected(), "Client should be disconnected after disconnect callback"
+            assert not client.is_connected(), (
+                "Client should be disconnected after disconnect callback"
+            )
 
             # Simulate reconnection after broker comes back
             client._should_reconnect = True

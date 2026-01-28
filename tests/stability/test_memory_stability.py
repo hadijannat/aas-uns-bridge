@@ -78,8 +78,7 @@ class TestMemoryStability:
 
         growth_ratio = memory_tracker.get_growth_ratio()
         assert growth_ratio < 1.5, (
-            f"Memory grew by {(growth_ratio - 1) * 100:.1f}% "
-            f"(expected < 50%)"
+            f"Memory grew by {(growth_ratio - 1) * 100:.1f}% (expected < 50%)"
         )
 
     @pytest.mark.timeout(60)
@@ -99,7 +98,7 @@ class TestMemoryStability:
             device_ids = [f"device_{i % 5}" for i in range(50)]
 
             # Pre-create 50 aliases
-            for path, device_id in zip(metric_paths, device_ids):
+            for path, device_id in zip(metric_paths, device_ids, strict=True):
                 alias_db.get_alias(path, device_id=device_id)
 
             # Take initial snapshot after setup
@@ -109,7 +108,7 @@ class TestMemoryStability:
 
             for cycle in range(100):
                 # Access the same 50 aliases repeatedly (should hit cache)
-                for path, device_id in zip(metric_paths, device_ids):
+                for path, device_id in zip(metric_paths, device_ids, strict=True):
                     alias_db.get_alias(path, device_id=device_id)
 
                 # Take snapshot every 10 cycles
@@ -120,8 +119,7 @@ class TestMemoryStability:
 
             growth_ratio = memory_tracker.get_growth_ratio()
             assert growth_ratio < 1.3, (
-                f"Memory grew by {(growth_ratio - 1) * 100:.1f}% "
-                f"(expected < 30%)"
+                f"Memory grew by {(growth_ratio - 1) * 100:.1f}% (expected < 30%)"
             )
 
     @pytest.mark.timeout(60)
@@ -145,7 +143,7 @@ class TestMemoryStability:
             asset_topics = [f"uns/test/asset/{i}" for i in range(10)]
 
             # Warm-up: add all assets initially with their fixed topics
-            for asset_id, topic in zip(asset_ids, asset_topics):
+            for asset_id, topic in zip(asset_ids, asset_topics, strict=True):
                 tracker.mark_online(asset_id, topic=topic)
 
             # Take initial snapshot after warm-up
@@ -155,7 +153,7 @@ class TestMemoryStability:
 
             for cycle in range(100):
                 # Mark all 10 assets online with their same fixed topics
-                for asset_id, topic in zip(asset_ids, asset_topics):
+                for asset_id, topic in zip(asset_ids, asset_topics, strict=True):
                     tracker.mark_online(asset_id, topic=topic)
 
                 # Remove 5 assets
@@ -163,7 +161,7 @@ class TestMemoryStability:
                     tracker.remove_asset(asset_id)
 
                 # Re-add the removed assets with their same fixed topics
-                for asset_id, topic in zip(asset_ids[:5], asset_topics[:5]):
+                for asset_id, topic in zip(asset_ids[:5], asset_topics[:5], strict=True):
                     tracker.mark_online(asset_id, topic=topic)
 
                 # Take snapshot every 10 cycles
@@ -174,6 +172,5 @@ class TestMemoryStability:
 
             growth_ratio = memory_tracker.get_growth_ratio()
             assert growth_ratio < 1.5, (
-                f"Memory grew by {(growth_ratio - 1) * 100:.1f}% "
-                f"(expected < 50%)"
+                f"Memory grew by {(growth_ratio - 1) * 100:.1f}% (expected < 50%)"
             )

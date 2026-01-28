@@ -40,9 +40,10 @@ class TestYamlSafety:
             yaml.safe_load(malicious_yaml)
 
         # Verify it's specifically a constructor error about the unsafe tag
-        assert "python/object" in str(exc_info.value).lower() or "constructor" in str(
-            exc_info.value
-        ).lower()
+        assert (
+            "python/object" in str(exc_info.value).lower()
+            or "constructor" in str(exc_info.value).lower()
+        )
 
     @pytest.mark.security
     def test_yaml_safe_load_rejects_python_module(self) -> None:
@@ -347,9 +348,7 @@ mqtt:
   port: 1883
   username: testuser
 """
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".yaml", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write(valid_config)
             f.flush()
 
@@ -367,9 +366,7 @@ mqtt:
         """Verify malicious YAML files are rejected when loaded."""
         malicious_config = "!!python/object/apply:subprocess.call\nargs: [['echo', 'pwned']]"
 
-        with tempfile.NamedTemporaryFile(
-            mode="w", suffix=".yaml", delete=False
-        ) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             f.write(malicious_config)
             f.flush()
 

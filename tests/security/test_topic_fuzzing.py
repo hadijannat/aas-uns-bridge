@@ -53,10 +53,9 @@ class TestTopicSanitization:
         assert len(result) > 0, "Result is empty string"
 
         # If input was expected to be safe and non-empty, verify it's preserved
-        if expected_safe and input_value:
-            # For very long inputs, result will be truncated but still safe
-            if len(input_value) <= 64:
-                assert result == input_value or result != "", f"Safe input modified: {result}"
+        # For very long inputs, result will be truncated but still safe
+        if expected_safe and input_value and len(input_value) <= 64:
+            assert result == input_value or result != "", f"Safe input modified: {result}"
 
     @pytest.mark.security
     def test_sanitize_removes_null_bytes(self) -> None:
@@ -113,7 +112,9 @@ class TestTopicSanitization:
             assert "/" not in result
             assert "\x00" not in result
             # Normalized Unicode should match expected
-            assert result == expected, f"Input: {input_val!r}, Expected: {expected!r}, Got: {result!r}"
+            assert result == expected, (
+                f"Input: {input_val!r}, Expected: {expected!r}, Got: {result!r}"
+            )
 
     @pytest.mark.security
     @pytest.mark.parametrize(
@@ -229,7 +230,9 @@ class TestTopicConstruction:
             assert "/" not in result, f"/ in result: {result}"
 
             # Verify expected sanitization
-            assert result == expected, f"Input: {input_val!r}, Expected: {expected!r}, Got: {result!r}"
+            assert result == expected, (
+                f"Input: {input_val!r}, Expected: {expected!r}, Got: {result!r}"
+            )
 
     @pytest.mark.security
     def test_topic_prefix_with_empty_hierarchy_levels(self) -> None:
@@ -317,4 +320,6 @@ class TestTopicConstruction:
             assert "\n" not in result
             assert "\t" not in result
             assert "\r" not in result
-            assert result == expected, f"Input: {input_val!r}, Expected: {expected!r}, Got: {result!r}"
+            assert result == expected, (
+                f"Input: {input_val!r}, Expected: {expected!r}, Got: {result!r}"
+            )

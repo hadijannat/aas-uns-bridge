@@ -11,6 +11,7 @@ def pytest_configure(config: pytest.Config) -> None:
 @pytest.fixture
 def fault_injector():
     """Create a fault injector for simulating failures."""
+
     class FaultInjector:
         def __init__(self):
             self._active_faults: list[str] = []
