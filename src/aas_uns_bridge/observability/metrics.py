@@ -203,6 +203,25 @@ class BridgeMetrics:
             "Total AAS write retry attempts",
         )
 
+        # State database metrics
+        self.state_db_evictions_total = Counter(
+            "aas_bridge_state_db_evictions_total",
+            "Total state database evictions",
+            ["db_type"],  # 'alias' or 'hash'
+        )
+
+        self.state_db_entries = Gauge(
+            "aas_bridge_state_db_entries",
+            "Current number of entries in state database",
+            ["db_type"],  # 'alias' or 'hash'
+        )
+
+        self.state_db_max_entries = Gauge(
+            "aas_bridge_state_db_max_entries",
+            "Maximum entries allowed in state database",
+            ["db_type"],  # 'alias' or 'hash'
+        )
+
 
 # Global metrics instance
 METRICS = BridgeMetrics()
