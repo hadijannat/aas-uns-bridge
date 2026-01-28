@@ -238,10 +238,14 @@ class UnsRetainedPublisher:
             # No cache - create pointer with auto-detected dictionary/version
             from aas_uns_bridge.semantic.models import SemanticContext
 
+            # Get all semantic keys if available (poly-hierarchical)
+            hierarchy = getattr(metric, "semantic_keys", ())
+
             context = SemanticContext.from_semantic_id(
                 semantic_id=metric.semantic_id,
                 unit=metric.unit,
                 data_type=metric.value_type,
+                additional_keys=hierarchy,
             )
             # Publish context so consumers can resolve the pointer hash
             if self._context_publisher:

@@ -104,8 +104,9 @@ def sanitize_metric_path(path: str) -> str:
     """Sanitize an AAS metric path for topic conversion.
 
     Converts dot-separated AAS paths to slash-separated topic paths.
-    Array indices use a distinguishable format (idx_N) to avoid
-    ambiguity with numeric idShorts.
+    Array indices use the format aNa (e.g., a0a, a10a) which cannot collide
+    with valid AAS idShorts (idShorts like "a0a" are syntactically valid but
+    extremely unlikely in practice).
 
     Args:
         path: Dot-separated AAS element path.
@@ -117,15 +118,15 @@ def sanitize_metric_path(path: str) -> str:
         >>> sanitize_metric_path("TechnicalData.GeneralInfo.Manufacturer Name")
         'TechnicalData/GeneralInfo/Manufacturer_Name'
         >>> sanitize_metric_path("List[0].Value")
-        'List/idx_0/Value'
+        'List/a0a/Value'
         >>> sanitize_metric_path("Config.123.Name")
         'Config/123/Name'
     """
     # Replace dots with slashes
     topic_path = path.replace(".", "/")
 
-    # Handle array indices: convert [0] to /idx_0 (distinguishable from numeric idShorts)
-    # Using idx_N format (no leading underscore) to survive sanitization
-    topic_path = re.sub(r"\[(\d+)\]", r"/idx_\1", topic_path)
+    # Handle array indices: convert [0] to /a0a (aNa format)
+    # This format is extremely unlikely to collide with real idShorts
+    topic_path = re.sub(r"\[(\d+)\]", r"/a\1a", topic_path)
 
     return sanitize_topic(topic_path)

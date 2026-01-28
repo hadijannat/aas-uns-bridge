@@ -368,14 +368,15 @@ class BidirectionalSync:
         """Convert MQTT path to REST API path with proper array notation.
 
         MQTT paths use slashes for separators. Array indices use the format
-        idx_N (e.g., idx_0, idx_1) to distinguish from numeric idShorts.
+        aNa (e.g., a0a, a10a) to distinguish from idShorts.
         REST API paths use dots for object access and brackets for array indices.
 
         Examples:
             Limits/MaxTemp -> Limits.MaxTemp
-            List/idx_0/Value -> List[0].Value
-            Settings/Items/idx_2/Name -> Settings.Items[2].Name
+            List/a0a/Value -> List[0].Value
+            Settings/Items/a2a/Name -> Settings.Items[2].Name
             Config/123/Name -> Config.123.Name (numeric idShort, not index)
+            Config/idx_1/Name -> Config.idx_1.Name (idShort, not index)
 
         Args:
             mqtt_path: MQTT-style path with slash separators.
@@ -389,8 +390,8 @@ class BidirectionalSync:
         result: list[str] = []
 
         for part in parts:
-            # Check for array index marker: idx_N
-            idx_match = re.match(r"^idx_(\d+)$", part)
+            # Check for array index marker: aNa (e.g., a0a, a10a)
+            idx_match = re.match(r"^a(\d+)a$", part)
             if idx_match:
                 # Array index - wrap in brackets, no dot before
                 result.append(f"[{idx_match.group(1)}]")

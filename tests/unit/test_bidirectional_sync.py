@@ -214,18 +214,18 @@ class TestBidirectionalSyncPathConversion:
         assert result == "Limits.MaxTemp"
 
     def test_array_index_conversion(self, sync_handler: BidirectionalSync) -> None:
-        """Test converting path with array index marker."""
-        result = sync_handler._convert_mqtt_path_to_api("List/idx_0/Value")
+        """Test converting path with array index marker (aNa format)."""
+        result = sync_handler._convert_mqtt_path_to_api("List/a0a/Value")
         assert result == "List[0].Value"
 
     def test_multiple_array_indices(self, sync_handler: BidirectionalSync) -> None:
         """Test converting path with multiple array indices."""
-        result = sync_handler._convert_mqtt_path_to_api("Settings/Items/idx_2/Name")
+        result = sync_handler._convert_mqtt_path_to_api("Settings/Items/a2a/Name")
         assert result == "Settings.Items[2].Name"
 
     def test_nested_arrays(self, sync_handler: BidirectionalSync) -> None:
         """Test converting path with nested arrays."""
-        result = sync_handler._convert_mqtt_path_to_api("Matrix/idx_0/idx_1/Value")
+        result = sync_handler._convert_mqtt_path_to_api("Matrix/a0a/a1a/Value")
         assert result == "Matrix[0][1].Value"
 
     def test_single_segment_path(self, sync_handler: BidirectionalSync) -> None:
@@ -235,7 +235,7 @@ class TestBidirectionalSyncPathConversion:
 
     def test_single_array_index(self, sync_handler: BidirectionalSync) -> None:
         """Test converting single array index marker."""
-        result = sync_handler._convert_mqtt_path_to_api("idx_0")
+        result = sync_handler._convert_mqtt_path_to_api("a0a")
         assert result == "[0]"
 
     def test_numeric_idshort_not_treated_as_index(self, sync_handler: BidirectionalSync) -> None:
@@ -248,6 +248,14 @@ class TestBidirectionalSyncPathConversion:
         """Test plain numeric segment is treated as property, not index."""
         result = sync_handler._convert_mqtt_path_to_api("0")
         assert result == "0"
+
+    def test_idx_prefixed_idshort_not_treated_as_index(
+        self, sync_handler: BidirectionalSync
+    ) -> None:
+        """Test that idx_ prefixed idShorts are NOT converted to array indices."""
+        # An idShort named "idx_1" should remain as a property, not an index
+        result = sync_handler._convert_mqtt_path_to_api("Config/idx_1/Name")
+        assert result == "Config.idx_1.Name"
 
 
 class TestBidirectionalSyncCommandParsing:
