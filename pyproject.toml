@@ -81,6 +81,9 @@ markers = [
     "e2e: end-to-end integration tests",
     "slow: slow-running tests",
     "load: load/performance tests",
+    "chaos: chaos engineering tests for failure resilience",
+    "stability: long-running stability and endurance tests",
+    "security: security and input validation tests",
 ]
 filterwarnings = [
     "ignore::DeprecationWarning:paho.*",
