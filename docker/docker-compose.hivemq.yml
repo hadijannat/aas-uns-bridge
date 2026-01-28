@@ -1,0 +1,39 @@
+# HiveMQ CE Docker Compose for AAS-UNS Bridge Interoperability Testing
+#
+# Usage:
+#   docker compose -f docker/docker-compose.hivemq.yml up -d
+#
+# HiveMQ Control Center:
+#   URL: http://localhost:8080
+#
+# Run tests:
+#   TEST_MQTT_HOST=localhost TEST_MQTT_PORT=1883 pytest tests/integration -v
+#
+
+services:
+  hivemq:
+    image: hivemq/hivemq-ce:latest
+    container_name: aas-uns-bridge-hivemq
+    ports:
+      - "1883:1883"     # MQTT
+      - "8080:8080"     # Control Center (HiveMQ CE)
+    environment:
+      - HIVEMQ_ALLOW_ALL_CLIENTS=true
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  # Optional: Add a test subscriber to verify messages
+  mqtt-subscriber:
+    image: eclipse-mosquitto:2
+    container_name: aas-uns-bridge-subscriber
+    depends_on:
+      hivemq:
+        condition: service_healthy
+    entrypoint: ["mosquitto_sub", "-h", "hivemq", "-t", "#", "-v"]
+    profiles:
+      - debug

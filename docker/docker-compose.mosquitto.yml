@@ -1,0 +1,41 @@
+# Mosquitto Docker Compose for AAS-UNS Bridge Testing
+#
+# Usage:
+#   docker compose -f docker/docker-compose.mosquitto.yml up -d
+#
+# Run tests:
+#   TEST_MQTT_HOST=localhost TEST_MQTT_PORT=1883 pytest tests/integration -v
+#
+
+services:
+  mosquitto:
+    image: eclipse-mosquitto:2
+    container_name: aas-uns-bridge-mosquitto
+    ports:
+      - "1883:1883"     # MQTT
+      - "9001:9001"     # WebSocket (if configured)
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto-data:/mosquitto/data
+      - mosquitto-log:/mosquitto/log
+    healthcheck:
+      test: ["CMD", "mosquitto_pub", "-h", "localhost", "-t", "health", "-m", "ok", "-q", "0"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+  # Optional: Add a test subscriber to verify messages
+  mqtt-subscriber:
+    image: eclipse-mosquitto:2
+    container_name: aas-uns-bridge-subscriber
+    depends_on:
+      mosquitto:
+        condition: service_healthy
+    entrypoint: ["mosquitto_sub", "-h", "mosquitto", "-t", "#", "-v"]
+    profiles:
+      - debug
+
+volumes:
+  mosquitto-data:
+  mosquitto-log:

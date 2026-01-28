@@ -426,7 +426,7 @@ class SparkplugPublisher:
         topic = self._build_topic("DDATA", device_id)
 
         start_time = time.perf_counter()
-        self.client.publish(topic, payload, qos=self.config.qos, retain=False)
+        self.client.publish(topic, payload, qos=0, retain=False)  # Sparkplug spec requires QoS=0
         duration = time.perf_counter() - start_time
         METRICS.publish_latency_seconds.labels(publisher_type="sparkplug").observe(duration)
         METRICS.sparkplug_data_total.inc()
